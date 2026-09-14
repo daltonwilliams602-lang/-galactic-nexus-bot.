@@ -1,0 +1,38 @@
+{
+  "guild_id": "1548550668900372560",
+  "mode": "test",
+  "owner_id": "258470721829732353",
+  "founder_ids": [
+    "258470721829732353",
+    "1494827444698480742",
+    "1132159444688568490",
+    "1374863187102535731"
+  ],
+  "role_ids": {},
+  "channel_ids": {},
+  "owner_approved_launch": false,
+  "database_dir": "data",
+  "backup_dir": "backups",
+  "xp_per_minute": 10,
+  "rank_thresholds": [
+    0,
+    500,
+    3000,
+    14400,
+    151200
+  ],
+  "transfer_ranks": [
+    0,
+    0,
+    1,
+    2,
+    2
+  ],
+  "faction_cooldown_days": 30,
+  "council_seats": 12,
+  "voice_checkin_minutes": 15,
+  "full_credit_minutes_per_day": 240,
+  "reduced_credit_minutes_per_day": 240,
+  "campaign_days": 30,
+  "inactivity_days": 90
+}

@@ -1,0 +1,11 @@
+WINDOWS BACKUP FIX — v1.1
+
+Close the failed Setup window. Extract this ZIP, open its galactic-nexus folder, and copy the contents into your existing galactic-nexus folder (the one containing Setup-Nexus.cmd). Choose Replace when Windows asks. Keep your existing data, backups, and config.local.json; this ZIP contains none of those files or folders.
+
+For cloud hosting, use HOSTING.md instead of running the bot on your PC. For optional Windows use, run Setup-Nexus.cmd again: expect 67 tests and OK (the Linux signal check skips on Windows), followed by Setup passed. Then continue with Start-Nexus.cmd. See START-HERE.md for the permission-error update steps.
+
+The root cause was an unclosed SQLite backup connection. Windows refused to remove the temporary test file because its handle was still open. The backup now closes deterministically on both success and failure. No reboot, Python reinstall, antivirus exclusion, admin launch, or deletion of your project is required for this code correction.
+
+Two regression tests failed on the old implementation and pass with this fix. The current 67 offline checks are verified in the development environment; the setup reruns them on your Windows PC.
+
+Technical reference: https://docs.python.org/3.14/library/sqlite3.html#how-to-use-the-connection-context-manager
