@@ -2,7 +2,13 @@
 
 This build runs the existing Discord bot on an always-on cloud worker. Once deployed and verified, your PC can be switched off. There is no website, public domain, extra XP bot, or separate database service to manage.
 
-**Current status:** hosted code is prepared; Railway is connected in ChatGPT, but no Railway project, worker, or volume has been created in this session. No hosting subscription or charge has been started. Live server configuration and founder testing still need to finish.
+**Current status (2026-09-14):** the GitHub repository and existing Railway worker are connected. The image builds, but hosted startup is blocked by the missing persistent volume. Railway's connected controls accepted multiple volume changes without showing a live volume afterward. Do not treat a successful build or accepted change as proof that Discord is online. Live configuration and founder testing remain pending.
+
+### Read-only Discord diagnosis
+
+Temporarily use start command `python -m nexus.diagnose` and restart policy `NEVER` for one diagnostic deployment. It uses the existing private `NEXUS_TOKEN` variable to check the configured guild owner, role hierarchy, required setup permissions, and missing channels. It does not write state, connect a database, send messages, change Discord settings, or start XP workers. A completed diagnostic is not a running bot.
+
+This command is separate from hosted setup: `python -m nexus.hosted` continues to require real persistent storage for every action. After diagnosis, restore that start command and restart policy `ON_FAILURE` with 5 retries. Attach and verify `/data`, run `NEXUS_ACTION=plan`, review the saved plan, then configure and run as described below.
 
 ## Hosting plan
 
@@ -18,7 +24,7 @@ Railway also offers a $0 plan with a small resource credit for experimentation. 
 | Source root | Folder containing `Dockerfile`, `nexus`, and `config.example.json` |
 | Start command | `python -m nexus.hosted` (already set in Dockerfile) |
 | Replicas | 1 |
-| Persistent volume | `nexus-state`, mounted at `/data`; start with 1 GB on the paid plan |
+| Persistent volume | `nexus-state`, mounted at `/data`; use the connected workspace's verified size allowance (512 MB reported on 2026-09-14) |
 | Serverless / sleeping | Disabled |
 | Restart policy | On Failure, 5 retries |
 | HTTP healthcheck / public domain | None; this is a Discord background worker |
