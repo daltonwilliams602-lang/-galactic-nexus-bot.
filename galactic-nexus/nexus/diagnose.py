@@ -38,6 +38,23 @@ def inspect_guild(guild, config):
     changes = role_changes(guild, roles, progression)
     missing = missing_setup_permissions(guild, actions, changes)
     issues.extend('Setup permission needed: ' + permission_label(p) for p in missing)
+    # Guild-level grants can be masked by an existing private-channel overwrite.
+    # Report every affected planned resource in one read-only pass.
+    resources = {channel.id: channel for channel in guild.channels}
+    access_issues = []
+    for action in actions:
+        channel = resources.get(action.get('id'))
+        if channel is None:
+            continue
+        effective = channel.permissions_for(guild.me)
+        absent = [p for p in ('view_channel', 'send_messages', 'read_message_history',
+                              'embed_links', 'attach_files') if not getattr(effective, p)]
+        if absent:
+            access_issues.append({'resource': action.get('key', action['name']),
+                                  'id': str(channel.id),
+                                  'missing': [permission_label(p) for p in absent]})
+    if access_issues:
+        issues.append('Owner must restore bot access to the listed planned categories/channels.')
     return {
         'diagnostic_only': True,
         'discord_mutations': False,
@@ -49,6 +66,7 @@ def inspect_guild(guild, config):
         'duplicate_channels_to_preserve': sum(a['kind'] == 'archive-duplicate' for a in actions),
         'roles_needing_permission_repair': [r.name for r, _ in changes],
         'setup_issues': issues,
+        'channel_access_issues': access_issues,
         'next_step': 'Attach persistent /data storage, then run hosted plan before configuration.',
     }
 

@@ -55,6 +55,17 @@ class DiagnosticTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report['missing_channels'], 49)
         self.assertNotIn('test-only-value', str(report))
 
+    def test_reports_existing_channel_denials_despite_guild_permissions(self):
+        guild, config = fixture()
+        self.assertTrue(guild.me.guild_permissions.view_channel)
+        guild.channels = [SimpleNamespace(id=700, permissions_for=lambda member: discord.Permissions.none())]
+        actions = [{'kind': 'text', 'name': 'staff-chat', 'key': 'STAFF/staff-chat', 'id': 700}]
+        with patch('nexus.diagnose.plan', return_value=actions):
+            report = inspect_guild(guild, config)
+        self.assertEqual(report['channel_access_issues'][0]['resource'], 'STAFF/staff-chat')
+        self.assertIn('View Channels', report['channel_access_issues'][0]['missing'])
+        self.assertTrue(any('restore bot access' in issue for issue in report['setup_issues']))
+
     def test_mismatched_owner_is_rejected_before_planning(self):
         guild, config = fixture()
         guild.owner_id = 456
