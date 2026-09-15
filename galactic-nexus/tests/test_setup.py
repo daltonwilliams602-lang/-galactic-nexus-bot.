@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import discord
 from nexus.blueprint import ROLE_PERMISSIONS
-from nexus.server_config import (apply_role_changes, missing_setup_permissions,
+from nexus.server_config import (apply_channels, apply_role_changes, missing_setup_permissions,
                                   overrides, require_setup_permissions, role_changes, signature)
 
 
@@ -75,6 +75,48 @@ class SetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.guild.me.guild_permissions.connect)
         self.assertEqual(missing_setup_permissions(self.guild, self.actions, changes), [])
         await apply_role_changes(changes)
+
+    async def check_arrival_setup(self, fail_child=False):
+        self.give_bot_threads()
+        final = overrides(self.guild, self.roles, self.bot_role, 'ARRIVAL')
+        parent = Obj(id=100, name='ARRIVAL', overwrites=final)
+        events = []
+
+        async def edit_parent(**kwargs):
+            parent.overwrites = kwargs['overwrites']
+            events.append('temporary' if parent.overwrites[self.bot_role].create_private_threads else 'final')
+            return parent
+
+        async def edit_child(**kwargs):
+            events.append('child')
+            for bit in ('create_public_threads', 'create_private_threads', 'send_messages_in_threads'):
+                self.assertTrue(getattr(parent.overwrites[self.bot_role], bit))
+                self.assertFalse(getattr(parent.overwrites[self.everyone], bit))
+            self.assertEqual(signature(kwargs['overwrites']), signature(final))
+            if fail_child:
+                raise discord.Forbidden(Obj(status=403, reason='Forbidden'),
+                    {'code': 50013, 'message': 'Missing Permissions'})
+
+        parent.edit = AsyncMock(side_effect=edit_parent)
+        child = Obj(id=101, name='rules', edit=AsyncMock(side_effect=edit_child))
+        self.guild.get_channel = lambda cid: {100: parent, 101: child}.get(cid)
+        actions = [dict(kind='category', name='ARRIVAL', id=100, position=0),
+                   dict(kind='text', category='ARRIVAL', name='rules', key='ARRIVAL/rules', id=101)]
+        with contextlib.redirect_stdout(io.StringIO()):
+            if fail_child:
+                with self.assertRaisesRegex(RuntimeError, 'updating channel ARRIVAL/rules'):
+                    await apply_channels(self.guild, self.roles, self.bot_role, actions)
+            else:
+                result = await apply_channels(self.guild, self.roles, self.bot_role, actions)
+                self.assertEqual(result, {'ARRIVAL/rules': '101'})
+        self.assertEqual(events, ['temporary', 'child', 'final'])
+        self.assertEqual(signature(parent.overwrites), signature(final))
+
+    async def test_arrival_keeps_approved_bot_threads_until_children_finish(self):
+        await self.check_arrival_setup()
+
+    async def test_arrival_removes_temporary_overwrites_after_child_failure(self):
+        await self.check_arrival_setup(fail_child=True)
 
     async def test_forbidden_error_names_role_and_stops_remaining_edits(self):
         error = discord.Forbidden(Obj(status=403, reason='Forbidden'), {'code': 50013, 'message': 'Missing Permissions'})

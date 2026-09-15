@@ -210,6 +210,19 @@ def plan(guild, roles, bot_role):
 async def apply_channels(guild, roles, bot_role, actions):
     channels = {}
     parents = {}
+    pending_cleanup = {}
+    try:
+        return await _apply_channels(guild, roles, bot_role, actions, channels, parents, pending_cleanup)
+    finally:
+        # ARRIVAL denies threads to members. Keep the approved bot-only thread
+        # access until child edits finish, then remove it even after a failure.
+        for name, parent in pending_cleanup.items():
+            with setup_step('removing temporary category permissions from '+name):
+                await parent.edit(overwrites=overrides(guild, roles, bot_role, name),
+                                  reason='Remove temporary Nexus setup thread permissions')
+
+
+async def _apply_channels(guild, roles, bot_role, actions, channels, parents, pending_cleanup):
     for action in actions:
         existing = guild.get_channel(action['id']) if action['id'] else None
         if action['kind']=='archive-duplicate':
@@ -219,13 +232,20 @@ async def apply_channels(guild, roles, bot_role, actions):
         elif action['kind']=='category':
             name = action['name']
             permissions = overrides(guild,roles,bot_role,name)
+            if name == 'ARRIVAL':
+                # Discord checks parent-channel permissions when editing a child.
+                # Guild-level thread grants alone are masked by ARRIVAL's denies.
+                permissions[bot_role].update(create_public_threads=True,
+                    create_private_threads=True, send_messages_in_threads=True)
             if existing:
                 with setup_step('updating category '+name+' ('+str(existing.id)+')'):
-                    await existing.edit(overwrites=permissions, position=action['position'], reason='Reviewed Nexus configuration')
+                    existing = await existing.edit(overwrites=permissions, position=action['position'], reason='Reviewed Nexus configuration')
             else:
                 with setup_step('creating category '+name):
                     existing = await guild.create_category(name, overwrites=permissions, position=action['position'], reason='Reviewed Nexus configuration')
             parents[name] = existing
+            if name == 'ARRIVAL':
+                pending_cleanup[name] = existing
         else:
             parent = parents[action['category']]
             permissions = overrides(guild,roles,bot_role,action['category'],action['name'])
