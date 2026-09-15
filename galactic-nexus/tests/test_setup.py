@@ -13,7 +13,7 @@ from nexus.server_config import (apply_channels, apply_role_changes, missing_set
 
 class SetupTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.guild = Obj(id=1, owner_id=99, roles=[])
+        self.guild = Obj(id=1, owner_id=99, roles=[], channels=[])
         self.guild.get_role = lambda rid: next((r for r in self.guild.roles if r.id == rid), None)
         self.everyone = self.role(1, '@everyone', discord.Permissions(read_message_history=True, use_application_commands=True))
         self.guild.default_role = self.everyone
@@ -48,6 +48,17 @@ class SetupTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, 'Create Private Threads'):
             require_setup_permissions(self.guild, self.actions, [])
         self.give_bot_threads()
+        self.assertEqual(missing_setup_permissions(self.guild, self.actions, []), [])
+
+    def test_existing_overwrite_removal_is_checked_before_setup(self):
+        self.give_bot_threads()
+        self.actions[0]['id'] = 100
+        self.guild.channels = [Obj(id=100, overwrites={
+            self.bot_role: discord.PermissionOverwrite(view_channel=True, connect=True)})]
+        self.assertEqual(missing_setup_permissions(self.guild, self.actions, []), ['connect'])
+        with self.assertRaisesRegex(RuntimeError, 'Connect'):
+            require_setup_permissions(self.guild, self.actions, [])
+        self.bot_role._permissions |= discord.Permissions(connect=True).value
         self.assertEqual(missing_setup_permissions(self.guild, self.actions, []), [])
 
     def test_permission_lost_when_everyone_is_restricted_is_detected(self):

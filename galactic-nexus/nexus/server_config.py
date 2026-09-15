@@ -50,9 +50,16 @@ def missing_setup_permissions(guild, actions, changes):
                                    manage_channels=True, manage_guild=True).value
     for _, permissions in changes:
         required |= permissions.value
+    current_channels = {channel.id: channel for channel in guild.channels}
     for action in actions:
         for allow, deny in action.get('permissions', {}).values():
             required |= allow | deny
+        current = current_channels.get(action.get('id'))
+        if current is not None:
+            # Replacing the overwrite map also removes old allow/deny bits.
+            # Private-category UI defaults can add Connect even to text roles.
+            for allow, deny in signature(current.overwrites).values():
+                required |= allow | deny
     replacements = {role.id: permissions.value for role, permissions in changes}
     future = 0
     for role in guild.me.roles:

@@ -58,7 +58,7 @@ class DiagnosticTests(unittest.IsolatedAsyncioTestCase):
     def test_reports_existing_channel_denials_despite_guild_permissions(self):
         guild, config = fixture()
         self.assertTrue(guild.me.guild_permissions.view_channel)
-        guild.channels = [SimpleNamespace(id=700, permissions_for=lambda member: discord.Permissions.none())]
+        guild.channels = [SimpleNamespace(id=700, overwrites={}, permissions_for=lambda member: discord.Permissions.none())]
         actions = [{'kind': 'text', 'name': 'staff-chat', 'key': 'STAFF/staff-chat', 'id': 700}]
         with patch('nexus.diagnose.plan', return_value=actions):
             report = inspect_guild(guild, config)
