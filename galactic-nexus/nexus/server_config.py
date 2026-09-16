@@ -26,7 +26,8 @@ def setup_step(label, permission_hint='Check the bot role and the permissions on
 
 def role_changes(guild, roles, editable):
     """Do not rewrite roles that already match, including @everyone."""
-    desired = [(guild.default_role, discord.Permissions(read_message_history=True, use_application_commands=True))]
+    desired = [(guild.default_role, discord.Permissions(read_message_history=True, use_application_commands=True,
+        create_instant_invite=guild.default_role.permissions.create_instant_invite))]
     desired += [(roles[name], discord.Permissions(**{p: True for p in ROLE_PERMISSIONS[name]}))
                 for name in ROLE_ORDER if name in editable]
     return [(role, permissions) for role, permissions in desired if role.permissions != permissions]
@@ -161,7 +162,8 @@ def resolve_roles(guild, configured=None):
 
 def check_permissions(guild, roles, bot_role, channel_ids):
     problems = []
-    expected_everyone = discord.Permissions(read_message_history=True, use_application_commands=True)
+    expected_everyone = discord.Permissions(read_message_history=True, use_application_commands=True,
+        create_instant_invite=guild.default_role.permissions.create_instant_invite)
     if guild.default_role.permissions.value != expected_everyone.value:
         problems.append('@everyone permissions differ from the blueprint')
     for name, role in roles.items():

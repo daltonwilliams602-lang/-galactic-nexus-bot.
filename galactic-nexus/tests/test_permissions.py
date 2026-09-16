@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace as Obj
 import discord
 from nexus.blueprint import ROLE_ORDER, ROLE_PERMISSIONS, CATEGORIES, can_view, RANKS
-from nexus.server_config import overrides
+from nexus.server_config import overrides, check_permissions, role_changes
 
 
 class PermissionTests(unittest.TestCase):
@@ -49,6 +49,27 @@ class PermissionTests(unittest.TestCase):
         self.assertFalse(p.send_messages)
         self.assertFalse(p.send_messages_in_threads)
         self.assertFalse(p.create_public_threads)
+
+    def test_owner_controlled_invites_keep_private_channels_private(self):
+        self.guild.default_role._permissions |= discord.Permissions(create_instant_invite=True).value
+        for names in ([], ['Member'], ['Member', 'Dark Side']):
+            arrival = self.permissions(names, 'ARRIVAL', 'incoming-transmissions')
+            self.assertTrue(arrival.create_instant_invite)
+            self.assertFalse(arrival.send_messages)
+            self.assertFalse(arrival.administrator)
+            for category, channel in (('STAFF', 'reports'), ('FOUNDER TESTING', 'test-results'),
+                                      ('JEDI TEMPLE', 'jedi-commons')):
+                self.assertFalse(self.permissions(names, category, channel).view_channel)
+        self.guild.categories = []
+        problems = check_permissions(self.guild, self.roles, self.roles['Galactic Nexus'], {})
+        self.assertNotIn('@everyone permissions differ from the blueprint', problems)
+        self.assertFalse(role_changes(self.guild, self.roles, set()))
+        self.guild.default_role._permissions |= discord.Permissions(manage_roles=True).value
+        problems = check_permissions(self.guild, self.roles, self.roles['Galactic Nexus'], {})
+        self.assertIn('@everyone permissions differ from the blueprint', problems)
+        repaired = role_changes(self.guild, self.roles, set())[0][1]
+        self.assertTrue(repaired.create_instant_invite)
+        self.assertFalse(repaired.manage_roles)
 
     def test_owner_has_inherent_access_without_roles(self):
         self.assertTrue(self.permissions([],'COUNCIL CHAMBERS','dark-council',owner=True).view_channel)

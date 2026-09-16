@@ -46,7 +46,7 @@ Highest to lowest:
 
 The technical owner has Discord's inherent ownership. Server Owner is cosmetic; Founding Council is a separate permanent governance designation by explicit account IDs. The bot never assigns or removes staff/owner/custom roles during progression reconciliation.
 
-@everyone has read-history/application-command permissions and receives Arrival visibility through channel overwrites. Member enables conversation and voice but no global channel visibility, invitations, mass mentions, or management. Lore, faction, Council, prestige, test, and notification roles have no native moderation powers.
+@everyone has read-history/application-command permissions and receives Arrival visibility through channel overwrites. The owner can enable Create Invite on @everyone; the bot preserves that setting and still rejects every other unexpected permission. Member enables conversation and voice but no global channel visibility, mass mentions, or management. Invite permission is inherited from @everyone when the owner enables it. Lore, faction, Council, prestige, test, and notification roles have no native moderation powers.
 
 Moderator has message/thread/nickname management, timeouts, and voice moderation. Senior Moderator, Admin, and Founding Council additionally have kick, ban, audit-log, and event management permissions. None has Administrator or Manage Roles. The owner manually selects staff.
 
