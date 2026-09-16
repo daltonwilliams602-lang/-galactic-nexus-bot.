@@ -71,6 +71,16 @@ class PermissionTests(unittest.TestCase):
         self.assertTrue(repaired.create_instant_invite)
         self.assertFalse(repaired.manage_roles)
 
+    def test_new_members_can_onboard_before_receiving_member_role(self):
+        for roles in ([], ['Member']):
+            p = self.permissions(roles, 'ARRIVAL', 'choose-your-path')
+            self.assertTrue(p.view_channel and p.send_messages and p.use_application_commands)
+            self.assertFalse(p.create_public_threads or p.create_private_threads or p.send_messages_in_threads)
+            for name in CATEGORIES['ARRIVAL']:
+                if name != 'choose-your-path':
+                    self.assertFalse(self.permissions(roles, 'ARRIVAL', name).send_messages)
+        self.assertFalse(self.permissions([], 'HOLOCOMMS', 'general').view_channel)
+
     def test_owner_has_inherent_access_without_roles(self):
         self.assertTrue(self.permissions([],'COUNCIL CHAMBERS','dark-council',owner=True).view_channel)
 

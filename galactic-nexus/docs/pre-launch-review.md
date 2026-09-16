@@ -73,7 +73,7 @@ The bot runs below staff and above progression. Normal operation needs Manage Ro
 **FOUNDER TESTING:** testing-lab, test-results, Founder Test VC (voice)
 
 
-Private Jedi/Sith categories grant the relevant faction plus staff oversight. Founding Council sees governance areas. Only the matching lore Council sees its own Council room; the other Council and ordinary moderators do not gain that access. Staff channels are private. Founder Testing is founder-only. Arrival and the selected announcement/reference channels are read-only for ordinary members, including thread creation/posting. The dedicated AFK room never earns XP.
+Private Jedi/Sith categories grant the relevant faction plus staff oversight. Founding Council sees governance areas. Only the matching lore Council sees its own Council room; the other Council and ordinary moderators do not gain that access. Staff channels are private. Founder Testing is founder-only. Arrival and the selected announcement/reference channels are read-only for ordinary members, except #choose-your-path: everyone can type there so new members can invoke /join before receiving Member. Thread creation/posting stays disabled throughout Arrival, and these channels award no XP. The dedicated AFK room never earns XP.
 
 ## 5. Onboarding
 

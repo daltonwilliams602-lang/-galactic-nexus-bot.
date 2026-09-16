@@ -136,6 +136,10 @@ def overrides(guild, roles, bot_role, category, channel=None):
         # Read-only posts are maintained by founders; staff can discuss in staff-chat.
         result[roles['Founding Council']] = discord.PermissionOverwrite(view_channel=True, send_messages=True,
                                                                         read_message_history=True)
+    if category == 'ARRIVAL' and channel == 'choose-your-path':
+        # Discord needs a message composer for new members to invoke /join.
+        # Keep thread creation/posting denied and all other Arrival rooms read-only.
+        result[guild.default_role].send_messages = True
     result[bot_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True,
         embed_links=True, attach_files=True, read_message_history=True)
     return result
@@ -185,8 +189,16 @@ def check_permissions(guild, roles, bot_role, channel_ids):
             key = category+'/'+item
             if len(matches) != 1 or str(channel_ids.get(key)) != str(matches[0].id):
                 problems.append(f'Channel missing, duplicated, or changed: {key}')
-            elif signature(matches[0].overwrites) != signature(overrides(guild,roles,bot_role,category,name)):
-                problems.append(f'Channel permissions differ: {key}')
+            else:
+                expected = overrides(guild,roles,bot_role,category,name)
+                accepted = [signature(expected)]
+                if category == 'ARRIVAL' and name == 'choose-your-path':
+                    # Allow the previous, more restrictive template during rollout.
+                    # Only this one deny bit may differ; every privacy check stays exact.
+                    expected[guild.default_role].send_messages = False
+                    accepted.append(signature(expected))
+                if signature(matches[0].overwrites) not in accepted:
+                    problems.append(f'Channel permissions differ: {key}')
     return problems
 
 
