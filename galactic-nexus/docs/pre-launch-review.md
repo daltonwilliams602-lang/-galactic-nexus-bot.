@@ -73,7 +73,7 @@ The bot runs below staff and above progression. Normal operation needs Manage Ro
 **FOUNDER TESTING:** testing-lab, test-results, Founder Test VC (voice)
 
 
-Private Jedi/Sith categories grant the relevant faction plus staff oversight. Founding Council sees governance areas. Only the matching lore Council sees its own Council room; the other Council and ordinary moderators do not gain that access. Staff channels are private. Founder Testing is founder-only. Arrival and the selected announcement/reference channels are read-only for ordinary members, except #choose-your-path: everyone can type there so new members can invoke /join before receiving Member. Thread creation/posting stays disabled throughout Arrival, and these channels award no XP. The dedicated AFK room never earns XP.
+Private Jedi/Sith categories grant the relevant faction plus staff oversight. Founding Council sees governance areas. Only the matching lore Council sees its own Council room; the other Council and ordinary moderators do not gain that access. Staff channels are private. Founder Testing is founder-only. Arrival and the selected announcement/reference channels are read-only for ordinary members, except #choose-your-path: everyone can type there so new members can invoke /join before receiving Member. Thread creation/posting stays disabled throughout Arrival, and these channels award no XP. Configured voice rooms, including AFK, now award automatic voice XP after the owner removed attendance checks.
 
 ## 5. Onboarding
 
@@ -97,9 +97,9 @@ The curve, rate, transfer mapping, cooldown, and campaign/inactivity settings ar
 
 ## 8. Anti-farming
 
-Text requires length and word-count thresholds; commands, repeated normalized text, near-duplicate word sequences, and reused message IDs are excluded. Numeric suffixes do not alter normalized words. Only salted token hashes and timestamps are retained for the current anti-repeat state, not stored chat bodies. Text/voice share a minute limiter. Qualifying conversation renews an attended-voice check-in.
+Text requires length and word-count thresholds; commands, repeated normalized text, near-duplicate word sequences, and reused message IDs are excluded. Numeric suffixes do not alter normalized words. Only salted token hashes and timestamps are retained for the current anti-repeat state, not stored chat bodies. Text/voice share a minute limiter.
 
-Voice requires at least two non-bot, eligible, recently checked-in participants in a configured non-AFK room. Muted, deafened, suppressed, timed-out, or expired-check-in members do not count. Continuous eligibility is required for a minute; leaving, changing rooms, losing a peer, disconnects, and long polling stalls reset that continuity. No offline awards are backfilled and no audio is recorded. This is a practical attendance heuristic, not proof of active speech or meaningful content.
+Voice XP is automatic for onboarded members with a chosen faction connected to configured voice rooms. Solo, muted, deafened, suppressed, and idle/AFK members count; no periodic confirmation or speech detection is required. Bots and timed-out members do not count. A continuous observed minute is required; leaving, changing rooms, disconnects, and long polling stalls reset continuity. Another member leaving does not interrupt the remaining member. No offline awards are backfilled and no audio is recorded. Existing daily full/reduced credit limits and the shared text/voice minute limit remain unchanged. Historical voice-check records are retained but ignored; the command and its configurable timer are retired.
 
 Daily diminishing returns: 240 full-credit minutes, then 240 at one-fifth rate, then no more activity XP for that UTC day. Event awards are separately verified human actions.
 

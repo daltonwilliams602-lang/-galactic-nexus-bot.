@@ -36,8 +36,8 @@ For each faction, repeat the visibility check at ranks 0–4 using founder test 
 1. Start with onboarding and a selected path. Note `/profile` XP.
 2. Send a normal, distinct conversation message of at least four words and 20 letters in an eligible chat channel. Expect 10 XP if no other award happened in the previous 60 seconds.
 3. Immediately send another message or join voice. Expect no second award in the same minute. Repeating the first message after a minute should still not count; trivial edits and numeric suffixes should not bypass the duplicate filter.
-4. Two founders join the same normal voice room, both unmuted/undeafened. Both run `/voice-check` and Confirm. Stay eligible for a complete minute, allowing up to another 15 seconds for the next poll. Expect a shared-pool voice award of 10 XP if no text award used that minute.
-5. Repeat with one person alone, in AFK, self-muted, deafened, or with an expired check-in. Those conditions should not earn voice XP. If a peer leaves, continuity restarts.
+4. Join a configured voice room after onboarding and selecting a faction. No check-in command is needed. Stay connected for a complete minute, allowing up to another 15 seconds for the next poll. Expect a shared-pool voice award of 10 XP if no text award used that minute and the daily full-credit allowance remains.
+5. Repeat alone, in AFK, self-muted, or deafened: those conditions now earn voice XP automatically. A peer leaving does not reset your time. Leaving voice yourself or a bot disconnection stops accrual; bots and timed-out members do not earn voice XP.
 6. Check-ins expire after 15 minutes unless renewed; qualifying text also renews participation for 15 minutes. Voice checks are attestations, not proof of speech. No voice audio is recorded.
 7. The first 240 rewarded minutes per UTC day earn full credit. The next 240 earn one-fifth credit (2 XP at default settings), then daily activity credit stops. These caps are covered by local tests/calculations; no one needs to farm eight hours to inspect the settings.
 

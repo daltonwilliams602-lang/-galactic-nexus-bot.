@@ -118,3 +118,9 @@ LIVE_CONTENT = {
     'testing-lab': '**FOUNDER RECORDS**\nThe server is live. Existing XP, ranks, reviews, campaign results, and audit history were preserved. `/founder-test` is disabled. This private channel retains the founders’ testing history.',
     'rank-progression': CONTENT['rank-progression'].replace('They are adjustable test values.', 'Thresholds can be adjusted by the founders.'),
 }
+
+# Refresh only this bot's exact former check-in instructions.
+LEGACY_VOICE_GUIDES = {'server-guide': CONTENT['server-guide']}
+CONTENT['server-guide'] = CONTENT['server-guide'].replace(
+    "`/voice-check` • confirm you're participating in VC",
+    'Voice XP • automatic while connected, including solo, muted, or idle members; no check-in needed')

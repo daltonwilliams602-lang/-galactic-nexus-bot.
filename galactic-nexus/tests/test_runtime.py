@@ -15,17 +15,17 @@ class VoiceTests(unittest.TestCase):
             self.assertEqual(p.observe({1:['1','2']},t),set())
         self.assertEqual(p.observe({1:['1','2']},60),{'1','2'})
 
-    def test_alone_duplicate_users_and_different_rooms_do_not_count(self):
+    def test_solo_members_count_once_each_without_peers(self):
         p=VoicePresence()
         for t in range(0,121,15):
-            self.assertFalse(p.observe({1:['1','1'],2:['2']},t))
+            self.assertEqual(p.observe({1:['1','1'],2:['2']},t), {'1','2'} if t >= 60 else set())
 
-    def test_peer_leaving_resets_continuity(self):
+    def test_peer_leaving_does_not_reset_remaining_member(self):
         p=VoicePresence()
         for t in [0,15,30,45]: p.observe({1:['1','2']},t)
         p.observe({1:['1']},50)
-        self.assertFalse(p.observe({1:['1','2']},60))
-        self.assertFalse(p.observe({1:['1','2']},75))
+        self.assertEqual(p.observe({1:['1','2']},60), {'1'})
+        self.assertEqual(p.observe({1:['1','2']},75), {'1'})
 
     def test_room_switch_and_stall_reset_continuity(self):
         p=VoicePresence()

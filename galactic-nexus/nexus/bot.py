@@ -18,7 +18,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTENT, LEGACY_PROGRESSION_GUIDES, LIVE_CONTENT
+from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTENT, LEGACY_PROGRESSION_GUIDES, LIVE_CONTENT, LEGACY_VOICE_GUIDES
 from .engine import Actor, Engine, PolicyError
 from .storage import Store
 from .runtime import VoicePresence, drain_outbox
@@ -121,6 +121,7 @@ class NexusBot(commands.Bot):
         replacements = {name: (previous, CONTENT[name]) for name, previous in LEGACY_PROGRESSION_GUIDES.items()}
         if self.config_data['mode'] == 'live':
             replacements.update({name: (CONTENT[name], current) for name, current in LIVE_CONTENT.items()})
+        replacements.update({name: (previous, CONTENT[name]) for name, previous in LEGACY_VOICE_GUIDES.items()})
         for name, (previous, current) in replacements.items():
             async for message in self.channel(name).history(limit=100):
                 if message.author.id == self.user.id and message.content == previous:
@@ -207,22 +208,21 @@ class NexusBot(commands.Bot):
     def attended_rooms(self, guild, now):
         rooms = {}
         approved_voice_ids = {int(cid) for key,cid in self.config_data.get('channel_ids',{}).items()
-                              if '/vc:' in key and not key.endswith('/vc:AFK')}
+                              if '/vc:' in key}
         for room in guild.voice_channels:
-            if room.id not in approved_voice_ids or room == guild.afk_channel:
+            if room.id not in approved_voice_ids:
                 continue
             users = []
             for member in room.members:
                 uid = str(member.id)
                 v = member.voice
                 m = self.engine.member(uid)
-                if member.bot or not v or v.self_mute or v.self_deaf or v.mute or v.deaf or v.suppress:
+                if member.bot or not v:
                     continue
                 if self.engine.c['mode']=='test' and uid not in self.engine.c['founder_ids']:
                     continue
                 self.refresh_timeout(member)
-                if (m['accepted'] and m['path'] and not member.is_timed_out()
-                    and self.store.get('voice-check',uid,{}).get('until',0)>now):
+                if m['accepted'] and m['path'] and not member.is_timed_out():
                     users.append(uid)
             rooms[room.id] = users
         return rooms
@@ -480,10 +480,6 @@ def register_commands(bot: NexusBot) -> None:
     async def path(i: discord.Interaction, path: app_commands.Choice[str]):
         await bot.policy(i, "path", path=path.value)
 
-    @bot.tree.command(name="voice-check", description="Confirm eligible voice participation for 15 minutes.", guild=guild)
-    async def voice_check(i: discord.Interaction):
-        await bot.policy(i, "voice-check")
-
     @bot.tree.command(name="interest", description="Toggle an optional notification role.", guild=guild)
     @app_commands.choices(role=[app_commands.Choice(name=x, value=x) for x in ("Game Nights", "Stream Alerts", "Events")])
     async def interest(i: discord.Interaction, role: app_commands.Choice[str]):
@@ -572,7 +568,7 @@ def register_commands(bot: NexusBot) -> None:
         await bot.policy(i,'council-emergency-remove',str(member.id),reason=reason)
 
     @bot.tree.command(name='configure', description='Founder-reviewed change to progression settings.', guild=guild)
-    async def configure_setting(i: discord.Interaction, key: Literal['rank_thresholds','transfer_ranks','faction_cooldown_days','voice_checkin_minutes','campaign_days','inactivity_days','xp_per_minute'], value: str, reason: str):
+    async def configure_setting(i: discord.Interaction, key: Literal['rank_thresholds','transfer_ranks','faction_cooldown_days','campaign_days','inactivity_days','xp_per_minute'], value: str, reason: str):
         try:
             parsed = json.loads(value)
         except ValueError:

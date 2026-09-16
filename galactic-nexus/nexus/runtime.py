@@ -7,10 +7,10 @@ from .blueprint import RANKS
 
 
 class VoicePresence:
-    """Require a continuous minute with two eligible, attended participants.
+    """Track connected members automatically, including solo and idle users.
 
-    No audio is recorded. A fresh check-in is only a participation attestation;
-    it cannot prove a human is actually speaking.
+    Require a continuous observed minute; never backfill disconnected time.
+    No audio is recorded and no check-in or speech detection is required.
     """
     def __init__(self):
         self.since = {}
@@ -24,7 +24,7 @@ class VoicePresence:
         if self.last_tick is not None and (now < self.last_tick or now-self.last_tick > 45):
             self.since.clear()  # Disconnection/stall never produces backfilled XP.
         self.last_tick = now
-        eligible = {str(uid): str(room) for room, users in rooms.items() if len(set(users)) >= 2 for uid in users}
+        eligible = {str(uid): str(room) for room, users in rooms.items() for uid in set(users)}
         for uid in list(self.since):
             if uid not in eligible or self.since[uid][0] != eligible[uid]:
                 del self.since[uid]

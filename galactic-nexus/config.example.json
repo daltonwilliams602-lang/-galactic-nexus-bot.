@@ -30,7 +30,6 @@
   ],
   "faction_cooldown_days": 30,
   "council_seats": 12,
-  "voice_checkin_minutes": 15,
   "full_credit_minutes_per_day": 240,
   "reduced_credit_minutes_per_day": 240,
   "campaign_days": 30,

@@ -74,8 +74,6 @@ class PolicyTests(unittest.TestCase):
     def test_fifty_qualifying_minutes_automatically_promote(self):
         self.join()
         for i in range(50):
-            if i % 10 == 0:
-                self.do(self.user,'voice-check')
             self.now += 60
             self.assertEqual(self.e.award_activity('10','voice',eligible_voice=True),10)
         self.assertEqual(self.e.member('10')['xp'],500)
@@ -85,7 +83,6 @@ class PolicyTests(unittest.TestCase):
 
     def test_text_voice_share_minute_and_reject_spam(self):
         self.join()
-        self.do(self.user,'voice-check')
         self.assertEqual(self.e.award_activity('10','text',content='lol',event_id='short'),0)
         content='This is a meaningful sentence about our game tonight'
         self.assertEqual(self.e.award_activity('10','text',content=content,event_id='a'),10)
@@ -94,8 +91,10 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(self.e.award_activity('10','text',content=content,event_id='b'),0)
         self.assertEqual(self.e.award_activity('10','voice',eligible_voice=False),0)
         self.assertEqual(self.e.award_activity('10','voice',eligible_voice=True),10)
+        self.s.put('voice-check', '10', {'until': 0})
         self.now += 901
-        self.assertEqual(self.e.award_activity('10','voice',eligible_voice=True),0)
+        self.assertEqual(self.e.award_activity('10','voice',eligible_voice=True),10)
+        self.assertEqual(self.s.get('voice-check', '10'), {'until': 0})
 
     def test_high_rank_needs_two_distinct_approvals(self):
         self.set_rank('10',3,xp=151200)

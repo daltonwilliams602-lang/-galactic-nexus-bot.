@@ -13,13 +13,13 @@ from nexus.engine import Actor, PolicyError
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_guide_refresh_only_edits_exact_bot_templates(self):
-        from nexus.blueprint import CONTENT, LEGACY_PROGRESSION_GUIDES
+        from nexus.blueprint import CONTENT, LEGACY_PROGRESSION_GUIDES, LEGACY_VOICE_GUIDES
         edits=[]
         preserved=[]
         def channel(name):
             messages=[]
-            for author_id, content in ((7,LEGACY_PROGRESSION_GUIDES[name]),
-                                       (8,LEGACY_PROGRESSION_GUIDES[name]),
+            for author_id, content in ((7,(LEGACY_PROGRESSION_GUIDES | LEGACY_VOICE_GUIDES)[name]),
+                                       (8,(LEGACY_PROGRESSION_GUIDES | LEGACY_VOICE_GUIDES)[name]),
                                        (7,'Custom founder guide')):
                 message=Obj(author=Obj(id=author_id),content=content,edit=AsyncMock())
                 messages.append(message)
@@ -40,6 +40,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.bot.config_data['mode'] = 'live'
         register_commands(self.bot)
         self.assertIsNone(self.bot.tree.get_command('founder-test', guild=discord.Object(id=100)))
+        self.assertIsNone(self.bot.tree.get_command('voice-check', guild=discord.Object(id=100)))
         self.assertIsNotNone(self.bot.tree.get_command('join', guild=discord.Object(id=100)))
 
     async def asyncSetUp(self):
@@ -145,7 +146,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(config['mode'], 'test')
         self.assertFalse(config['owner_approved_launch'])
 
-    def test_voice_filter_excludes_mute_deaf_afk_bots_and_unchecked_members(self):
+    def test_voice_is_automatic_for_idle_members_but_excludes_bots_and_timeouts(self):
         import time
         now=time.time()
         guild=Obj(afk_channel=None)
@@ -154,7 +155,6 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             self.enrolled(uid)
             m=self.bot.engine.member(uid); m['path']='jedi'
             self.bot.engine.save_member(m)
-            self.bot.store.put('voice-check',uid,{'until':now+900})
             member=self.member(uid)
             member.voice=Obj(self_mute=False,self_deaf=False,mute=False,deaf=False,suppress=False)
             member.is_timed_out=lambda:False
@@ -162,12 +162,13 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         rooms=[Obj(id=10,members=members),Obj(id=11,members=members)]
         guild.voice_channels=rooms
         self.bot.config_data['channel_ids']={'CANTINA & EVENTS/vc:General VC':'10','CANTINA & EVENTS/vc:AFK':'11'}
-        self.assertEqual(self.bot.attended_rooms(guild,now),{10:['1','2','3','4']})
+        self.assertEqual(self.bot.attended_rooms(guild,now),{10:['1','2','3','4'],11:['1','2','3','4']})
         members[0].voice.self_mute=True
         members[1].voice.self_deaf=True
         members[2].bot=True
         self.bot.store.put('voice-check','4',{'until':now-1})
-        self.assertEqual(self.bot.attended_rooms(guild,now),{10:[]})
+        members[3].is_timed_out=lambda:True
+        self.assertEqual(self.bot.attended_rooms(guild,now),{10:['1','2'],11:['1','2']})
 
     def test_setup_instance_lock_rejects_second_process(self):
         from nexus.launch import instance_lock

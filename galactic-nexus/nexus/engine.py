@@ -29,7 +29,7 @@ class Actor:
 
 DEFAULTS = dict(mode='test', owner_id='', founder_ids=[], rank_thresholds=[0, 500, 3000, 14400, 151200],
     transfer_ranks=[0, 0, 1, 2, 2], xp_per_minute=10, faction_cooldown_days=30,
-    voice_checkin_minutes=15, full_credit_minutes_per_day=240,
+    full_credit_minutes_per_day=240,
     reduced_credit_minutes_per_day=240, council_seats=12, campaign_days=30, inactivity_days=90)
 
 
@@ -300,8 +300,8 @@ class Engine:
             result = {'interests': m['interests']}
         elif action == 'voice-check':
             require(m['accepted'] and m['path'], 'Complete onboarding and choose a path first.')
-            self.s.put('voice-check', target, {'until': self.clock() + self.config()['voice_checkin_minutes'] * 60})
-            result = {'checkin_minutes': self.config()['voice_checkin_minutes'], 'note': 'Only eligible, attended voice minutes count. No audio is recorded.'}
+            # Compatibility for an old confirmation button; it cannot affect XP eligibility.
+            result = {'note': 'Voice XP is automatic while connected. No check-in is needed.'}
         elif action == 'report':
             rid = args['operation_id'][:12]
             self.s.put('report', rid, {'member': target, 'reason': reason, 'status': 'open', 'at': self.clock()})
@@ -413,7 +413,7 @@ class Engine:
             result = {'prestige_titles': m['prestige']}
         elif action == 'configure':
             key, value = args.get('key'), args.get('value')
-            allowed = {'rank_thresholds', 'transfer_ranks', 'faction_cooldown_days', 'voice_checkin_minutes',
+            allowed = {'rank_thresholds', 'transfer_ranks', 'faction_cooldown_days',
                 'campaign_days', 'inactivity_days', 'xp_per_minute'}
             require(key in allowed, 'That setting is not editable through Discord.')
             if key == 'rank_thresholds':
@@ -422,8 +422,6 @@ class Engine:
                 require(isinstance(value, list) and len(value) == 5 and value[0] == 0 and all(type(x) is int and 0 <= x <= min(i, 3) for i, x in enumerate(value)), 'Invalid transfer mapping; a new path cannot start at Master/Lord.')
             else:
                 require(type(value) is int and 1 <= value <= 365, 'Choose a positive integer up to 365.')
-                if key == 'voice_checkin_minutes':
-                    require(value <= 30, 'Voice presence checks may not exceed 30 minutes.')
             old = self.config().get(key)
             overrides = self.s.get('config', 'runtime', {})
             overrides[key] = value
@@ -646,8 +644,7 @@ class Engine:
                 if self.s.get('recent-text', str(uid) + ':' + digest, {}).get('at', 0) > now - 86400:
                     return 0
             else:
-                check = self.s.get('voice-check', uid, {})
-                if not eligible_voice or check.get('until', 0) <= now:
+                if not eligible_voice:
                     return 0
             # At most one reward per real 60 seconds and per minute bucket, across both modalities.
             previous = self.s.get('activity-clock', uid, {'at': -1000})
@@ -666,7 +663,6 @@ class Engine:
             if source == 'text':
                 self.s.put('recent-text', str(uid) + ':' + digest, {'at': now})
                 self.s.put('last-text', uid, {'at': now, 'tokens': tokens})
-                self.s.put('voice-check', uid, {'until': now + cfg['voice_checkin_minutes'] * 60})
             m['xp'] += amount
             m['paths'][m['path']]['xp'] += amount
             m['last_active'] = now
