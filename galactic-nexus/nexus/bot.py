@@ -18,7 +18,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTENT, LEGACY_PROGRESSION_GUIDES
+from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTENT, LEGACY_PROGRESSION_GUIDES, LIVE_CONTENT
 from .engine import Actor, Engine, PolicyError
 from .storage import Store
 from .runtime import VoicePresence, drain_outbox
@@ -115,13 +115,16 @@ class NexusBot(commands.Bot):
             self.activity_loop.start()
             self.delivery_loop.start()
             self.backup_loop.start()
-            print('Galactic Nexus is online in PRIVATE TEST MODE. Use /join in Discord.')
+            print('Galactic Nexus is online in '+self.config_data['mode'].upper()+' MODE. Use /join in Discord.', flush=True)
 
     async def refresh_progression_guides(self):
-        for name, previous in LEGACY_PROGRESSION_GUIDES.items():
+        replacements = {name: (previous, CONTENT[name]) for name, previous in LEGACY_PROGRESSION_GUIDES.items()}
+        if self.config_data['mode'] == 'live':
+            replacements.update({name: (CONTENT[name], current) for name, current in LIVE_CONTENT.items()})
+        for name, (previous, current) in replacements.items():
             async for message in self.channel(name).history(limit=100):
                 if message.author.id == self.user.id and message.content == previous:
-                    await message.edit(content=CONTENT[name], allowed_mentions=discord.AllowedMentions.none())
+                    await message.edit(content=current, allowed_mentions=discord.AllowedMentions.none())
                     print('Updated automatic-rank guide in #'+name, flush=True)
 
     def channel(self, name):
@@ -519,9 +522,10 @@ def register_commands(bot: NexusBot) -> None:
     async def award_xp(i: discord.Interaction, member: discord.Member, amount: int, event_id: str, reason: str):
         await bot.policy(i, 'award-xp', str(member.id), amount=amount, event_id=event_id, reason=reason)
 
-    @bot.tree.command(name='founder-test', description='Change your own test state with a confirmation.', guild=guild)
-    async def founder_test(i: discord.Interaction, field: Literal['faction','rank','xp','path_xp','cooldown','eligibility','council'], value: str, reason: str):
-        await bot.policy(i, 'founder-test', field=field, value=value, reason=reason)
+    if bot.config_data['mode'] == 'test':
+        @bot.tree.command(name='founder-test', description='Change your own test state with a confirmation.', guild=guild)
+        async def founder_test(i: discord.Interaction, field: Literal['faction','rank','xp','path_xp','cooldown','eligibility','council'], value: str, reason: str):
+            await bot.policy(i, 'founder-test', field=field, value=value, reason=reason)
 
     @bot.tree.command(name='override', description='Founder correction to a member’s progression, with an audit reason.', guild=guild)
     async def override(i: discord.Interaction, member: discord.Member, field: Literal['faction','rank','xp','path_xp','cooldown','eligibility'], value: str, reason: str):
@@ -618,10 +622,17 @@ def register_commands(bot: NexusBot) -> None:
 
 
 async def run_bot(config, token):
-    if config.get("mode") != "test":
-        raise RuntimeError('This release is for private founder testing. Live launch requires the separate pre-launch review.')
+    from .activation import validate_live
+    mode = config.get('mode')
+    if mode not in {'test', 'live'}:
+        raise RuntimeError('Unknown mode.')
     db_dir = Path(config.get("database_dir", "data"))
-    bot = NexusBot(config, db_path=db_dir / "test.sqlite3")
+    database = db_dir / (mode + '.sqlite3')
+    if mode == 'live':
+        validate_live(config, database)
+    elif (db_dir / 'live.sqlite3').exists():
+        raise RuntimeError('Live migration exists; archived test state cannot be resumed.')
+    bot = NexusBot(config, db_path=database)
     register_commands(bot)
     async with bot:
         await bot.start(token)

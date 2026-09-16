@@ -76,7 +76,7 @@ class HostedTests(unittest.IsolatedAsyncioTestCase):
     def test_hosting_does_not_enable_public_mode(self):
         self.config['mode'] = 'live'
         write_json(self.config_path, self.config)
-        with self.assertRaisesRegex(RuntimeError, 'private founder testing only'):
+        with self.assertRaisesRegex(RuntimeError, 'recorded activation'):
             prepare_state(self.root)
 
     async def test_missing_secret_never_opens_an_interactive_prompt(self):

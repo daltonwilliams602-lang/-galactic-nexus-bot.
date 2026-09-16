@@ -1,8 +1,6 @@
 # Galactic Nexus — implementation and pre-launch review
 
-**Status: private test package prepared; live connection and configuration still pending.** This is an implementation review, not a claim that founder acceptance testing or public-launch approval has happened.
-
-The Discord server was created and most native layout work was performed earlier. The browser session has since become unavailable. No Discord application/token is present in this package and no bot has connected from this workspace. Run the reviewed configuration and private bot from Dalton's PC, then perform the founder checklist. Offline checks passed on Python 3.12.14 with discord.py 2.7.1; Windows-specific launch execution and Discord HTTP/Gateway behavior remain live acceptance gates.
+**Release update (2026-09-16):** the hosted worker, persistent volume, private setup, founder testing, and restart checks have been exercised. This release adds explicit owner-approved live activation while preserving existing XP, ranks, history, and pending approvals. See [HOSTING.md](../HOSTING.md) for activation and recovery. Later operational records determine live deployment status; the implementation checklist below is not evidence that every human acceptance scenario was exercised.
 
 ## 1. Created and prepared
 

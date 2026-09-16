@@ -29,12 +29,18 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                 for message in messages:
                     yield message
             return Obj(history=history)
-        await NexusBot.refresh_progression_guides(Obj(user=Obj(id=7),channel=channel))
+        await NexusBot.refresh_progression_guides(Obj(user=Obj(id=7),channel=channel,config_data={"mode":"test"}))
         for name,message in edits:
             message.edit.assert_awaited_once()
             self.assertEqual(message.edit.call_args.kwargs['content'],CONTENT[name])
         for message in preserved:
             message.edit.assert_not_awaited()
+
+    async def test_live_commands_hide_founder_test(self):
+        self.bot.config_data['mode'] = 'live'
+        register_commands(self.bot)
+        self.assertIsNone(self.bot.tree.get_command('founder-test', guild=discord.Object(id=100)))
+        self.assertIsNotNone(self.bot.tree.get_command('join', guild=discord.Object(id=100)))
 
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()

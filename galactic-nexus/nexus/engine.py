@@ -82,6 +82,8 @@ class Engine:
 
     def authorize(self, a, action, target):
         require(bool(a.id), 'Unknown acting member.')
+        if action == 'founder-test':
+            require(self.c['mode'] == 'test', 'Founder test commands are disabled in live mode.')
         if self.c['mode'] == 'test':
             require(self.founder(a), 'This server is in private founder testing.')
         self_actions = {'join', 'path', 'faction-request', 'interest', 'report', 'voice-check'}
