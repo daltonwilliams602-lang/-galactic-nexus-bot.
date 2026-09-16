@@ -21,10 +21,11 @@ class PermissionTests(unittest.TestCase):
         self.guild.get_role=lambda rid:next((r for r in self.guild.roles if r.id==rid),None)
         self.guild.get_member=lambda uid:None
 
-    def permissions(self,names,category,channel,owner=False):
+    def permissions(self,names,category,channel,owner=False,voice=False):
         mapping=overrides(self.guild,self.roles,self.roles['Galactic Nexus'],category,channel)
         overwrites=[{'id':str(role.id),'type':0,'allow':str(ow.pair()[0].value),'deny':str(ow.pair()[1].value)} for role,ow in mapping.items()]
-        c=discord.TextChannel(state=None,guild=self.guild,data={'id':'200','name':channel,'type':0,'position':0,'permission_overwrites':overwrites})
+        channel_type = discord.VoiceChannel if voice else discord.TextChannel
+        c=channel_type(state=None,guild=self.guild,data={'id':'200','name':channel,'type':2 if voice else 0,'bitrate':64000,'user_limit':0,'position':0,'permission_overwrites':overwrites})
         m=discord.Member(data={'user':{'id':'5000' if owner else '6000','username':'fixture','discriminator':'0','avatar':None},
                               'flags':0,'roles':[str(self.roles[n].id) for n in names]},guild=self.guild,
                          state=Obj(store_user=lambda data:discord.User(state=None,data=data)))
@@ -70,6 +71,25 @@ class PermissionTests(unittest.TestCase):
         repaired = role_changes(self.guild, self.roles, set())[0][1]
         self.assertTrue(repaired.create_instant_invite)
         self.assertFalse(repaired.manage_roles)
+
+    def test_soundboard_access_preserves_voice_privacy_and_permission_checks(self):
+        self.guild.default_role._permissions |= discord.Permissions(
+            use_soundboard=True, use_external_sounds=True).value
+        for names in (['Member'], ['Member', 'Light Side'], ['Member', 'Dark Side']):
+            voice = self.permissions(names, 'CANTINA & EVENTS', 'General VC', voice=True)
+            self.assertTrue(voice.connect and voice.use_soundboard and voice.use_external_sounds)
+            self.assertFalse(voice.administrator or voice.manage_roles)
+            self.assertFalse(self.permissions(names, 'FOUNDER TESTING', 'Founder Test VC').view_channel)
+        self.guild.categories = []
+        self.assertNotIn('@everyone permissions differ from the blueprint',
+                         check_permissions(self.guild, self.roles, self.roles['Galactic Nexus'], {}))
+        self.assertFalse(role_changes(self.guild, self.roles, set()))
+        self.guild.default_role._permissions |= discord.Permissions(administrator=True).value
+        self.assertIn('@everyone permissions differ from the blueprint',
+                      check_permissions(self.guild, self.roles, self.roles['Galactic Nexus'], {}))
+        repaired = role_changes(self.guild, self.roles, set())[0][1]
+        self.assertTrue(repaired.use_soundboard and repaired.use_external_sounds)
+        self.assertFalse(repaired.administrator)
 
     def test_new_members_can_onboard_before_receiving_member_role(self):
         for roles in ([], ['Member']):
