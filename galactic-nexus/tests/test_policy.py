@@ -67,11 +67,11 @@ class PolicyTests(unittest.TestCase):
         self.join()
         for actor in [self.user,self.actor('10','Jedi Master'),self.actor('10','Dark Council')]:
             with self.assertRaises(PolicyError): self.do(actor,'override','10',field='rank',value=3)
-        self.set_rank('20',0,xp=500)
+        self.set_rank('20',3,xp=151200)
         self.e.queue_promotion(self.e.member('20'))
         with self.assertRaises(PolicyError): self.do(self.mod,'promotion-review',self.pending(uid='20'),decision='approve')
 
-    def test_fifty_qualifying_minutes_open_first_review(self):
+    def test_fifty_qualifying_minutes_automatically_promote(self):
         self.join()
         for i in range(50):
             if i % 10 == 0:
@@ -79,10 +79,9 @@ class PolicyTests(unittest.TestCase):
             self.now += 60
             self.assertEqual(self.e.award_activity('10','voice',eligible_voice=True),10)
         self.assertEqual(self.e.member('10')['xp'],500)
-        self.assertEqual(self.e.member('10')['rank'],0)
-        pid=self.pending()
-        self.do(self.mod,'promotion-review',pid,decision='approve')
         self.assertEqual(self.e.member('10')['rank'],1)
+        self.assertFalse(self.s.all('proposal'))
+        self.assertIn('Jedi Initiate', self.e.desired_roles('10'))
 
     def test_text_voice_share_minute_and_reject_spam(self):
         self.join()
@@ -104,9 +103,76 @@ class PolicyTests(unittest.TestCase):
         pid=self.pending()
         self.do(self.mod,'promotion-review',pid,decision='approve')
         self.assertEqual(self.e.member('10')['rank'],3)
-        with self.assertRaises(PolicyError): self.do(self.mod,'promotion-review',pid,decision='approve')
+        with self.assertRaisesRegex(PolicyError, 'already recorded'): self.do(self.mod,'promotion-review',pid,decision='approve',reason='A different duplicate reason')
         self.do(self.mod2,'promotion-review',pid,decision='approve')
         self.assertEqual(self.e.member('10')['rank'],4)
+
+    def test_automatic_rank_boundaries_for_both_factions(self):
+        for path in ('jedi', 'sith'):
+            for xp, rank in ((499,0),(500,1),(2999,1),(3000,2),(14399,2),(14400,3),(151199,3),(151200,3)):
+                with self.subTest(path=path, xp=xp):
+                    uid = path+str(xp)
+                    self.set_rank(uid,0,path=path,xp=xp)
+                    pid = self.e.queue_promotion(self.e.member(uid))
+                    m = self.e.member(uid)
+                    self.assertEqual((m['xp'],m['rank']), (xp,rank))
+                    self.assertEqual(m['paths'][path]['earned_rank'],rank)
+                    self.assertEqual(pid is not None,xp==151200)
+                    self.assertNotIn('Founding Council',self.e.desired_roles(uid))
+                    self.assertNotIn('Jedi High Council',self.e.desired_roles(uid))
+                    self.assertNotIn('Dark Council',self.e.desired_roles(uid))
+
+    def test_automatic_rank_respects_conduct_hold_and_timeout(self):
+        self.set_rank('10',0,xp=3000)
+        self.do(self.mod,'standing','10',decision='add',days=1)
+        self.e.queue_promotion(self.e.member('10'))
+        self.assertEqual(self.e.member('10')['rank'],0)
+        self.now += 86401
+        m=self.e.member('10'); m['native_timeout_until']=self.now+60
+        self.e.save_member(m)
+        self.e.queue_promotion(self.e.member('10'))
+        self.assertEqual(self.e.member('10')['rank'],0)
+        self.now += 61
+        self.e.queue_promotion(self.e.member('10'))
+        self.assertEqual(self.e.member('10')['rank'],2)
+        self.assertEqual(self.e.member('10')['xp'],3000)
+
+    def test_reconciliation_preserves_existing_top_approval_and_history(self):
+        self.set_rank('10',0,xp=151200)
+        self.s.put('proposal','old-low',dict(kind='promotion',member='10',path='jedi',rank=1,status='pending',approvals=[]))
+        pid=self.e.queue_promotion(self.e.member('10'))
+        self.assertEqual(self.s.get('proposal','old-low')['status'],'superseded')
+        self.do(self.mod,'promotion-review',pid,decision='approve')
+        before=self.s.get('proposal',pid)
+        audit_count=self.s.db.execute('SELECT count(*) FROM audit').fetchone()[0]
+        restored=Engine(self.s,self.cfg,clock=lambda:self.now)
+        self.assertEqual(restored.queue_promotion(restored.member('10')),pid)
+        self.assertEqual(self.s.get('proposal',pid),before)
+        self.assertEqual(self.s.db.execute('SELECT count(*) FROM audit').fetchone()[0],audit_count)
+        self.assertEqual(restored.member('10')['rank'],3)
+
+    def test_legacy_denial_is_not_silently_overridden(self):
+        self.set_rank('10',0,xp=3000)
+        self.s.put('proposal','held',dict(kind='promotion',member='10',path='jedi',rank=1,status='denied'))
+        self.e.queue_promotion(self.e.member('10'))
+        self.assertEqual(self.e.member('10')['rank'],0)
+        self.assertEqual(self.s.get('proposal','held')['status'],'denied')
+
+    def test_automatic_rank_preview_and_failed_transaction_do_not_apply(self):
+        from unittest.mock import patch
+        self.join()
+        self.e.preview(self.owner,'override','10',dict(field='xp',value=3000,reason='Preview rank advancement'))
+        self.assertEqual((self.e.member('10')['xp'],self.e.member('10')['rank']),(0,0))
+        self.set_rank('10',0,xp=3000)
+        with patch.object(self.e,'audit',side_effect=RuntimeError('Simulated write failure')):
+            with self.assertRaises(RuntimeError): self.e.queue_promotion(self.e.member('10'))
+        self.assertEqual(self.e.member('10')['rank'],0)
+
+    def test_xp_reduction_does_not_demote_or_erase_earned_rank(self):
+        self.set_rank('10',3,xp=14400)
+        self.do(self.owner,'override','10',field='xp',value=500)
+        m=self.e.member('10')
+        self.assertEqual((m['rank'],m['xp'],m['paths']['jedi']['earned_rank']),(3,500,3))
 
     def test_revoked_staff_approval_does_not_count(self):
         self.set_rank('10',3,xp=151200)
@@ -118,13 +184,13 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(self.e.member('10')['rank'],3)
 
     def test_discipline_defers_without_losing_xp(self):
-        self.set_rank('10',0,xp=500)
+        self.set_rank('10',3,xp=151200)
         self.e.queue_promotion(self.e.member('10'))
         pid=self.pending()
         self.do(self.mod,'standing','10',decision='add',days=30)
         with self.assertRaises(PolicyError): self.do(self.mod2,'promotion-review',pid,decision='approve')
         self.do(self.mod2,'promotion-review',pid,decision='defer')
-        self.assertEqual(self.e.member('10')['xp'],500)
+        self.assertEqual(self.e.member('10')['xp'],151200)
         self.assertEqual(self.s.get('proposal',pid)['status'],'deferred')
 
     def test_faction_penalty_cooldown_and_high_rank_history(self):

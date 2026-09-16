@@ -12,6 +12,30 @@ from nexus.engine import Actor, PolicyError
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_guide_refresh_only_edits_exact_bot_templates(self):
+        from nexus.blueprint import CONTENT, LEGACY_PROGRESSION_GUIDES
+        edits=[]
+        preserved=[]
+        def channel(name):
+            messages=[]
+            for author_id, content in ((7,LEGACY_PROGRESSION_GUIDES[name]),
+                                       (8,LEGACY_PROGRESSION_GUIDES[name]),
+                                       (7,'Custom founder guide')):
+                message=Obj(author=Obj(id=author_id),content=content,edit=AsyncMock())
+                messages.append(message)
+            edits.append((name,messages[0]))
+            preserved.extend(messages[1:])
+            async def history(limit):
+                for message in messages:
+                    yield message
+            return Obj(history=history)
+        await NexusBot.refresh_progression_guides(Obj(user=Obj(id=7),channel=channel))
+        for name,message in edits:
+            message.edit.assert_awaited_once()
+            self.assertEqual(message.edit.call_args.kwargs['content'],CONTENT[name])
+        for message in preserved:
+            message.edit.assert_not_awaited()
+
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.bot = NexusBot(dict(guild_id='100', owner_id='1', founder_ids=['1','2','3','4'], mode='test'),

@@ -107,7 +107,7 @@ Daily diminishing returns: 240 full-credit minutes, then 240 at one-fifth rate, 
 
 ## 9. Promotions
 
-Threshold → private review → human approval. Lower/middle ranks require one current authorized reviewer; Master/Lord requires two distinct reviewers. No self-review. Reviewer authority and candidate timeout/standing are rechecked at confirmation. Deferred promotions retain XP; reopening clears prior approvals. A later threshold does not silently skip human approvals.
+Threshold → automatic advancement through Knight/Warrior. Only Master/Lord requires a private review and two distinct reviewers. No self-review. Reviewer authority and candidate timeout/standing are rechecked at confirmation. Deferred promotions retain XP; reopening clears prior approvals. Multiple earned lower thresholds can advance together; the top rank never skips human approval. Active conduct holds and explicit legacy review holds pause automatic advancement.
 
 ## 10. Faction changes
 

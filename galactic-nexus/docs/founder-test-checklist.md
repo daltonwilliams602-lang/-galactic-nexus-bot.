@@ -45,13 +45,13 @@ For each faction, repeat the visibility check at ranks 0–4 using founder test 
 
 Use the following only in private test mode. Every founder-test command affects the caller's test state and logs the change.
 
-1. Run `/founder-test field:rank value:0 reason:Testing first promotion` and Confirm.
-2. Run `/founder-test field:xp value:500 reason:Testing first threshold` and Confirm.
-3. `/dashboard section:reviews` should show an open promotion. Note its ID. The rank must remain Force Sensitive until approval.
-4. The subject tries `/promotion-review review_id:<ID> decision:approve reason:Testing self approval`. It must refuse.
-5. Another founder approves and confirms. Expect Jedi Initiate or Sith Acolyte and retained XP.
-6. To test the highest rank, set your own test rank to 3 and XP to 151200. Another founder's first approval should leave rank 3. Their repeat approval should be refused. A second distinct founder must approve and confirm before Master/Lord is granted.
-7. For a conduct hold, another founder uses `/standing member:<subject> decision:add days:1 reason:Temporary promotion-hold test`. Approval must be blocked and XP preserved. Defer the promotion. Clear the specific restriction ID shown in the action preview/log, reopen the review, and obtain fresh approvals.
+1. Set your test XP to 0, then your test rank to 0 using `/founder-test`, confirming each change. Set XP first so reconciliation does not restore the rank from existing XP.
+2. Preview `/founder-test field:xp value:500 reason:Testing first threshold` and Cancel. The rank and XP must not change. Repeat and Confirm: expect Jedi Initiate or Sith Acolyte automatically, with no lower-rank review.
+3. Repeat with 3000 and 14400 XP: expect Padawan/Apprentice and then Knight/Warrior, retaining XP and earned-rank history.
+4. Set XP to 151200. The rank must remain Knight/Warrior and `/dashboard section:reviews` must show a top-rank review. The subject's self-approval must be refused.
+5. Another founder's first approval must leave rank 3. Their repeat approval, even with a different reason, must be refused. A second distinct founder must approve and confirm before Master/Lord is granted.
+6. For a conduct hold, another founder uses `/standing member:<subject> decision:add days:1 reason:Temporary promotion-hold test`. Both automatic advancement and top-rank approval must be blocked while the hold is active; XP remains. Clear the specific restriction ID afterward. For an explicitly deferred top review, reopen it and obtain fresh approvals.
+7. Existing lower-rank pending reviews are superseded when the rank is automatically earned; old explicit denied/deferred reviews remain holds until staff reopens them. Audit history remains intact.
 
 ## E. Faction switch and history
 

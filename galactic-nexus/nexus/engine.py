@@ -161,6 +161,35 @@ class Engine:
         return p['xp'] >= self.config()['rank_thresholds'][m['rank'] + 1]
 
     def queue_promotion(self, m, forced=False, reason='XP milestone reached'):
+        # Callers applying commands/activity already own a transaction; standalone
+        # reconciliation must commit rank, history, and delivery work together.
+        if not self.s.db.in_transaction:
+            with self.s.transaction():
+                return self.queue_promotion(m, forced=forced, reason=reason)
+        if not m['accepted'] or not m['path']:
+            return None
+        before = copy.deepcopy(m)
+        while m['rank'] < 3 and self.eligible(m) and not self.active_restrictions(m):
+            next_rank = m['rank'] + 1
+            legacy = [(pid, q) for pid, q in self.s.all('proposal').items()
+                      if q['kind'] == 'promotion' and q['member'] == m['id']
+                      and q['path'] == m['path'] and q['rank'] == next_rank]
+            # Preserve an explicit staff hold from the earlier manual policy.
+            if any(q['status'] in {'deferred', 'denied'} for _, q in legacy):
+                break
+            m['rank'] = next_rank
+            m['paths'][m['path']]['earned_rank'] = max(
+                next_rank, m['paths'][m['path']]['earned_rank'])
+            for pid, q in legacy:
+                if q['status'] == 'pending':
+                    q.update(status='superseded', resolution='XP threshold now advances this rank automatically')
+                    self.s.put('proposal', pid, q)
+        if m['rank'] != before['rank']:
+            self.save_member(m)
+            self.audit(Actor('system'), 'automatic-promotion', m['id'], before, m,
+                       'Qualified XP threshold; approvals required only for Master/Lord')
+        if m['rank'] < 3 or m['rank'] >= 4:
+            return None
         if not forced and not self.eligible(m):
             return None
         require(m['path'] and m['rank'] < 4, 'No next progression rank.')
@@ -212,7 +241,7 @@ class Engine:
         self.close_member_proposals(m['id'], 'Faction changed; previous approvals no longer apply')
         self.save_member(m)
         self.queue_promotion(m)
-        return {'path': destination, 'rank': RANKS[destination][rank], 'total_xp_preserved': m['xp'],
+        return {'path': destination, 'rank': RANKS[destination][m['rank']], 'total_xp_preserved': m['xp'],
                 'cooldown_days': self.config()['faction_cooldown_days'],
                 'consequences': 'Previous Council access ends. Previously earned top ranks need fresh human review; history is retained.'}
 

@@ -18,7 +18,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS
+from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTENT, LEGACY_PROGRESSION_GUIDES
 from .engine import Actor, Engine, PolicyError
 from .storage import Store
 from .runtime import VoicePresence, drain_outbox
@@ -103,6 +103,7 @@ class NexusBot(commands.Bot):
                 await self._load_roles(guild)
                 self.validate_channels(guild)
                 self.store.backup(self.config_data.get('backup_dir','backups'))
+                await self.refresh_progression_guides()
                 await self.tree.sync(guild=discord.Object(id=self.guild_id))
             except (RuntimeError, discord.HTTPException) as exc:
                 self._startup_error = str(exc)
@@ -115,6 +116,13 @@ class NexusBot(commands.Bot):
             self.delivery_loop.start()
             self.backup_loop.start()
             print('Galactic Nexus is online in PRIVATE TEST MODE. Use /join in Discord.')
+
+    async def refresh_progression_guides(self):
+        for name, previous in LEGACY_PROGRESSION_GUIDES.items():
+            async for message in self.channel(name).history(limit=100):
+                if message.author.id == self.user.id and message.content == previous:
+                    await message.edit(content=CONTENT[name], allowed_mentions=discord.AllowedMentions.none())
+                    print('Updated automatic-rank guide in #'+name, flush=True)
 
     def channel(self, name):
         ids = [cid for key,cid in self.config_data.get('channel_ids',{}).items() if key.endswith('/'+name)]
@@ -373,6 +381,8 @@ class NexusBot(commands.Bot):
             return
         async with self._role_lock:
             member = await member.guild.fetch_member(member.id)
+            self.refresh_timeout(member)
+            self.engine.queue_promotion(self.engine.member(str(member.id)))
             add_ids, remove_ids = role_delta({r.id for r in member.roles},
                 self.engine.desired_roles(str(member.id)), self._role_ids)
             # Remove stale faction/Council access before granting new access.
