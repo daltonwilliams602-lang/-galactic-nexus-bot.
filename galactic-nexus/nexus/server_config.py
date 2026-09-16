@@ -284,3 +284,19 @@ async def _apply_channels(guild, roles, bot_role, actions, channels, parents, pe
                     existing = await create(action['name'], category=parent, overwrites=permissions, reason='Reviewed Nexus configuration')
             channels[action['key']] = str(existing.id)
     return channels
+
+
+def register_dnd_xp_channels(guild, channel_ids):
+    """Register the requested DnD rooms only while synced to the validated category."""
+    keys = {'dnd': ('CANTINA & EVENTS/dnd', discord.TextChannel),
+            'DnD': ('CANTINA & EVENTS/vc:DnD', discord.VoiceChannel)}
+    for key, _ in keys.values():
+        channel_ids.pop(key, None)
+    parents = [c for c in guild.categories if c.name == 'CANTINA & EVENTS']
+    if len(parents) != 1:
+        return
+    parent = parents[0]
+    for name, (key, kind) in keys.items():
+        matches = [c for c in parent.channels if c.name == name and isinstance(c, kind)]
+        if len(matches) == 1 and signature(matches[0].overwrites) == signature(parent.overwrites):
+            channel_ids[key] = str(matches[0].id)

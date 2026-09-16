@@ -22,7 +22,7 @@ from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTEN
 from .engine import Actor, Engine, PolicyError
 from .storage import Store
 from .runtime import VoicePresence, drain_outbox
-from .server_config import resolve_roles, check_permissions
+from .server_config import resolve_roles, check_permissions, register_dnd_xp_channels
 
 # Governance and integration roles are never progression-managed.
 PROGRESSION_ROLES = frozenset(ROLE_ORDER) - set(STAFF) - {"Server Owner", "Galactic Nexus"}
@@ -143,6 +143,11 @@ class NexusBot(commands.Bot):
         problems = check_permissions(guild,roles,bot_role,self.config_data.get('channel_ids',{}))
         if problems:
             raise RuntimeError('Run Configure Server to repair these permission checks: '+ '; '.join(problems))
+        before = dict(self.config_data.get('channel_ids', {}))
+        register_dnd_xp_channels(guild, self.config_data.setdefault('channel_ids', {}))
+        for key, cid in self.config_data['channel_ids'].items():
+            if before.get(key) != cid:
+                print('Registered XP channel: '+key, flush=True)
 
     def native_event(self, action, target, details):
         if not self._validated.is_set():

@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace as Obj
 import discord
 from nexus.blueprint import ROLE_ORDER, ROLE_PERMISSIONS, CATEGORIES, can_view, RANKS
-from nexus.server_config import overrides, check_permissions, role_changes
+from nexus.server_config import overrides, check_permissions, role_changes, register_dnd_xp_channels
 
 
 class PermissionTests(unittest.TestCase):
@@ -111,3 +111,29 @@ class PermissionTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+
+class DndRegistrationTests(unittest.TestCase):
+    def test_registration_requires_unique_typed_synced_rooms_and_removes_stale_ids(self):
+        from unittest.mock import Mock
+        parent = Obj(name='CANTINA & EVENTS', overwrites={}, channels=[])
+        text = Mock(spec=discord.TextChannel)
+        text.name, text.id, text.overwrites = 'dnd', 101, {}
+        voice = Mock(spec=discord.VoiceChannel)
+        voice.name, voice.id, voice.overwrites = 'DnD', 102, {}
+        parent.channels = [text, voice]
+        guild = Obj(categories=[parent])
+        ids = {'existing': '100'}
+        register_dnd_xp_channels(guild, ids)
+        self.assertEqual(ids, {'existing': '100', 'CANTINA & EVENTS/dnd': '101',
+                               'CANTINA & EVENTS/vc:DnD': '102'})
+        parent.channels = [text, voice, voice]
+        register_dnd_xp_channels(guild, ids)
+        self.assertNotIn('CANTINA & EVENTS/vc:DnD', ids)
+        text.overwrites = {ObjRole(): discord.PermissionOverwrite(view_channel=True)}
+        register_dnd_xp_channels(guild, ids)
+        self.assertEqual(ids, {'existing': '100'})
+
+
+class ObjRole:
+    id = 1
