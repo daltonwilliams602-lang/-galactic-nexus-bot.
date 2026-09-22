@@ -47,6 +47,51 @@ class PolicyTests(unittest.TestCase):
     def pending(self, kind='promotion', uid='10'):
         return next(k for k,v in self.s.all('proposal').items() if v['kind']==kind and v['member']==uid and v['status']=='pending')
 
+    def test_ticket_report_close_history_and_stale_confirmation(self):
+        result = self.do(self.user, 'report', reported_member='11', reason='Repeated disruption in voice')
+        rid = result['proposed']['ticket']
+        original = self.s.get('report', rid)
+        self.assertEqual(original['member'], '10')
+        self.assertEqual(original['reported_member'], '11')
+        with self.assertRaises(PolicyError):
+            self.do(self.user, 'ticket-close', rid, reason='No action needed')
+        for reason in ('', '    ', 'x'*1001):
+            with self.assertRaises(PolicyError):
+                self.e.preview(self.mod, 'ticket-close', rid, {'reason': reason})
+        token, _ = self.e.preview(self.mod, 'ticket-close', rid, {'reason': 'Warned member; disruption stopped'})
+        stale, _ = self.e.preview(self.mod2, 'ticket-close', rid, {'reason': 'Duplicate handling'})
+        self.assertEqual(self.s.get('report', rid), original)
+        with self.assertRaises(PolicyError):
+            self.e.confirm(self.actor(self.mod.id), token)
+        self.e.confirm(self.mod, token)
+        closed = self.s.get('report', rid)
+        self.assertEqual(closed['status'], 'closed')
+        self.assertEqual(closed['reason'], original['reason'])
+        self.assertEqual(closed['closed_by'], self.mod.id)
+        self.assertEqual(closed['actions_taken'], 'Warned member; disruption stopped')
+        self.assertEqual(closed['closed_at'], self.now)
+        with self.assertRaises(PolicyError):
+            self.e.confirm(self.mod2, stale)
+        with self.assertRaises(PolicyError):
+            self.do(self.mod, 'ticket-close', rid)
+        audit = self.s.db.execute("SELECT * FROM audit WHERE action='ticket-close'").fetchall()
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(self.s.get('member', rid), None)
+
+    def test_legacy_reports_remain_readable_and_closable(self):
+        from nexus.tickets import ticket_rows, ticket_embed
+        from nexus.runtime import notification
+        self.s.put('report', 'old', {'member':'10', 'reason':'Original concern', 'status':'open', 'at': self.now})
+        self.assertIn('not specified', ticket_rows(self.s)[0])
+        self.assertIn('Original concern', str(ticket_embed('old', self.s.get('report','old')).to_dict()))
+        self.do(self.mod, 'ticket-close', 'old', reason='Reviewed evidence; no violation found')
+        self.assertEqual(ticket_rows(self.s), [])
+        self.assertEqual(len(ticket_rows(self.s, 'closed')), 1)
+        destination, body = notification(self.s, 'ticket-closed', {'id':'old'})
+        self.assertEqual(destination, 'reports')
+        self.assertIn('Reviewed evidence', body)
+        self.assertIn('CLOSED', body)
+
     def test_confirmation_does_not_mutate_and_is_actor_bound(self):
         token,_ = self.e.preview(self.user,'join','10',dict(age_confirmed=True,rules_accepted=True))
         self.assertFalse(self.e.member('10')['accepted'])

@@ -50,8 +50,16 @@ def notification(store, kind, payload):
         else:
             body += '\nUse `/faction-review` with this review ID.'
         return destination, body + '\nReason: ' + q.get('reason','')
-    if kind == 'report':
-        return 'reports', f'**Private report {payload["id"]}**\nMember: <@{payload["member"]}>\n{payload["reason"]}'
+    if kind in {'report', 'ticket-closed'}:
+        ticket = store.get('report', payload['id']) or payload
+        reported = f"<@{ticket['reported_member']}>" if ticket.get('reported_member') else 'Not specified / general concern'
+        body = (f"**Ticket {payload['id']} • {ticket.get('status', 'open').upper()}**\n"
+                f"Reporter: <@{ticket['member']}>\nReported member: {reported}\n"
+                f"Reason: {ticket['reason']}")
+        if ticket.get('status') == 'closed':
+            body += (f"\nClosed by: <@{ticket['closed_by']}>\nClosed at: <t:{int(ticket['closed_at'])}:F>"
+                     f"\nActions taken: {ticket['actions_taken']}")
+        return 'reports', body + '\nUse `/ticket view` for details, `/ticket summary` for the queue, or `/close ticket` to record resolution.'
     if kind == 'campaign-result':
         campaign = store.get('campaign', payload['id'])
         return 'campaign-history', f'**{campaign["name"]} — confirmed result**\nJedi: {campaign["scores"]["jedi"]} | Sith: {campaign["scores"]["sith"]}\nWinner: {campaign["winner"] or "Tie; no exclusive winner"}\nSeason: {campaign["id"]}'

@@ -87,7 +87,7 @@ class Engine:
         if self.c['mode'] == 'test':
             require(self.founder(a), 'This server is in private founder testing.')
         self_actions = {'join', 'path', 'faction-request', 'interest', 'report', 'voice-check'}
-        staff_actions = {'promotion-review', 'faction-review', 'award-xp', 'influence', 'standing', 'council-nominate'}
+        staff_actions = {'ticket-close', 'promotion-review', 'faction-review', 'award-xp', 'influence', 'standing', 'council-nominate'}
         founder_actions = {'override', 'prestige', 'council-vote', 'council-finalize', 'campaign-start',
             'campaign-finish', 'campaign-edit', 'configure', 'founder-test'}
         if action in self_actions:
@@ -107,6 +107,9 @@ class Engine:
             require(proposal is not None, 'Review item not found.')
             member = self.member(proposal['member'])
             data = [proposal, member['revision'], member['native_timeout_until'], member['restrictions']]
+        elif action == 'ticket-close':
+            data = self.s.get('report', target)
+            require(data is not None, 'Ticket not found.')
         elif action.startswith('campaign-') or action == 'influence':
             data = [self.s.all('campaign'), self.s.get('meta', 'active_campaign'), self.member(args.get('member', target))['revision']]
         elif action == 'configure':
@@ -304,9 +307,25 @@ class Engine:
             result = {'note': 'Voice XP is automatic while connected. No check-in is needed.'}
         elif action == 'report':
             rid = args['operation_id'][:12]
-            self.s.put('report', rid, {'member': target, 'reason': reason, 'status': 'open', 'at': self.clock()})
+            self.s.put('report', rid, {'member': target, 'reported_member': args.get('reported_member'),
+                'reason': reason, 'status': 'open', 'at': self.clock()})
             self.s.enqueue('report', {'id': rid, 'member': target, 'reason': reason})
-            result = {'private_report': rid, 'status': 'Sent to staff'}
+            result = {'ticket': rid, 'reporter': target, 'reported_member': args.get('reported_member') or 'General concern / appeal',
+                      'reason': reason[:500], 'status': 'Open — sent to staff'}
+        elif action == 'ticket-close':
+            ticket = self.s.get('report', target)
+            require(ticket is not None, 'Ticket not found.')
+            require(ticket.get('status', 'open') == 'open', 'This ticket is already closed.')
+            require(5 <= len(str(args.get('reason', '')).strip()) <= 1000,
+                    'Describe actions taken in 5–1,000 characters.')
+            previous = copy.deepcopy(ticket)
+            ticket.update(status='closed', closed_by=a.id, closed_at=self.clock(), actions_taken=reason)
+            self.s.put('report', target, ticket)
+            self.s.enqueue('ticket-closed', {'id': target})
+            self.audit(a, action, target, previous, ticket, reason)
+            return {'ticket': target, 'reporter': ticket['member'],
+                    'reported_member': ticket.get('reported_member') or 'Not specified',
+                    'status': 'closed', 'closed_by': a.id, 'actions_taken': reason}
         elif action == 'award-xp':
             require(m['accepted'] and m['path'], 'Member must complete onboarding and choose a path.')
             require(self.c['mode'] == 'test' or a.id != target, 'Have another staff member award your participation.')

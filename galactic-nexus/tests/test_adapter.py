@@ -43,6 +43,25 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.bot.tree.get_command('voice-check', guild=discord.Object(id=100)))
         self.assertIsNotNone(self.bot.tree.get_command('join', guild=discord.Object(id=100)))
 
+    async def test_ticket_commands_are_private_and_reject_nonstaff(self):
+        register_commands(self.bot)
+        group = self.bot.tree.get_command('ticket', guild=discord.Object(id=100))
+        close = self.bot.tree.get_command('close', guild=discord.Object(id=100))
+        self.assertIsNotNone(close.get_command('ticket'))
+        report = self.bot.tree.get_command('report', guild=discord.Object(id=100))
+        self.assertEqual([p.name for p in report.parameters], ['reason', 'member'])
+        self.bot.store.put('report', 'secret', {'member':'10', 'reason':'Private evidence', 'at':1, 'status':'open'})
+        for command, args in ((group.get_command('summary'), {}), (group.get_command('view'), {'ticket':'secret'})):
+            interaction = Obj(response=Obj(defer=AsyncMock()), edit_original_response=AsyncMock())
+            self.bot.fresh_actor = AsyncMock(return_value=Actor('99'))
+            await command.callback(interaction, **args)
+            interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+            self.assertEqual(interaction.edit_original_response.call_args.kwargs['content'], 'Staff access required.')
+        self.bot.fresh_actor = AsyncMock(return_value=Actor('20', frozenset({'Moderator'})))
+        interaction = Obj(response=Obj(defer=AsyncMock()), edit_original_response=AsyncMock())
+        await group.get_command('view').callback(interaction, ticket='secret')
+        self.assertIn('Private evidence', str(interaction.edit_original_response.call_args.kwargs['embed'].to_dict()))
+
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.bot = NexusBot(dict(guild_id='100', owner_id='1', founder_ids=['1','2','3','4'], mode='test'),

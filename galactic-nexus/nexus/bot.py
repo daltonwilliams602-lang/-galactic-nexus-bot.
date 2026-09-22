@@ -22,6 +22,7 @@ from .blueprint import ROLE_ORDER, ROLE_PERMISSIONS, STAFF, NO_XP, RANKS, CONTEN
 from .engine import Actor, Engine, PolicyError
 from .storage import Store
 from .runtime import VoicePresence, drain_outbox
+from .tickets import ticket_rows, ticket_embed
 from .server_config import resolve_roles, check_permissions, register_dnd_xp_channels
 
 # Governance and integration roles are never progression-managed.
@@ -365,7 +366,7 @@ class NexusBot(commands.Bot):
         self.refresh_timeout(member)
         q = self.store.get('proposal', target)
         subject = q['member'] if q else target
-        if subject and subject.isdecimal() and subject != str(member.id):
+        if action != 'ticket-close' and subject and subject.isdecimal() and subject != str(member.id):
             self.refresh_timeout(await guild.fetch_member(int(subject)))
         # Only current, still-present staff approvals can count toward promotion.
         staff = set()
@@ -455,8 +456,13 @@ class ConfirmView(discord.ui.View):
             if item is None:
                 raise PolicyError('Confirmation unavailable.')
             actor = await self.bot.fresh_actor(interaction, item['action'], item['target'])
-            self.bot.engine.confirm(actor, self.token)
-            await interaction.edit_original_response(content="Applied and logged. Role updates will sync shortly.", view=None)
+            result = self.bot.engine.confirm(actor, self.token)
+            message = "Applied and logged. Role updates will sync shortly."
+            if item['action'] == 'report':
+                message = f"Report submitted privately to staff. Ticket ID: `{result['proposed']['ticket']}`."
+            elif item['action'] == 'ticket-close':
+                message = f"Ticket `{result['ticket']}` closed. Your actions-taken notes and closure time were saved."
+            await interaction.edit_original_response(content=message, view=None)
         except (ValueError, discord.HTTPException) as exc:
             used = self.bot.store.get('confirmation', self.token, {}).get('used', False)
             message = 'Saved; Discord response failed. Check /profile before retrying.' if used else f'Not applied: {exc}'
@@ -508,8 +514,9 @@ def register_commands(bot: NexusBot) -> None:
         await bot.policy(i, 'faction-request', path=path, reason=reason)
 
     @bot.tree.command(name='report', description='Submit a private concern or appeal to the staff queue.', guild=guild)
-    async def report(i: discord.Interaction, reason: str):
-        await bot.policy(i, 'report', reason=reason)
+    @app_commands.describe(reason='What happened? Include relevant context or message links.', member='Who are you reporting? Leave blank for a general concern or appeal.')
+    async def report(i: discord.Interaction, reason: app_commands.Range[str,5,1500], member: discord.Member | None = None):
+        await bot.policy(i, 'report', reason=reason, reported_member=str(member.id) if member else None)
 
     @bot.tree.command(name='promotion-review', description='Review a pending promotion with a documented decision.', guild=guild)
     async def promotion_review(i: discord.Interaction, review_id: str, decision: Literal['approve','defer','deny','reopen'], reason: str):
@@ -593,6 +600,48 @@ def register_commands(bot: NexusBot) -> None:
         except (PolicyError,discord.HTTPException) as exc:
             await i.edit_original_response(content=str(exc))
 
+    ticket_group = app_commands.Group(name='ticket', description='Private staff report tickets.')
+    close_group = app_commands.Group(name='close', description='Resolve staff records.')
+
+    @ticket_group.command(name='summary', description='List open or closed report tickets for staff.')
+    async def ticket_summary(i: discord.Interaction, status: Literal['open','closed','all']='open', page: app_commands.Range[int,1,10000]=1):
+        await i.response.defer(ephemeral=True)
+        try:
+            actor = await bot.fresh_actor(i)
+            if not bot.engine.staff(actor):
+                raise PolicyError('Staff access required.')
+            rows = ticket_rows(bot.store, status)
+            pages = max(1, (len(rows)+4)//5)
+            content = f'**{status.title()} tickets — {len(rows)} total — page {page}/{pages}**\n'
+            content += '\n\n'.join(rows[(page-1)*5:page*5]) or 'No tickets on this page.'
+            content += '\nUse `/ticket view` with a ticket ID for full details.'
+            await i.edit_original_response(content=content[:1950], allowed_mentions=discord.AllowedMentions.none())
+        except (PolicyError, discord.HTTPException) as exc:
+            await i.edit_original_response(content=str(exc))
+
+    @ticket_group.command(name='view', description='Read a ticket, its reporter, subject, and resolution.')
+    async def ticket_view(i: discord.Interaction, ticket: str):
+        await i.response.defer(ephemeral=True)
+        try:
+            actor = await bot.fresh_actor(i)
+            if not bot.engine.staff(actor):
+                raise PolicyError('Staff access required.')
+            rid = ticket.strip().lower()
+            record = bot.store.get('report', rid)
+            if record is None:
+                raise PolicyError('Ticket not found. Use /ticket summary to find its ID.')
+            await i.edit_original_response(embed=ticket_embed(rid, record), allowed_mentions=discord.AllowedMentions.none())
+        except (PolicyError, discord.HTTPException) as exc:
+            await i.edit_original_response(content=str(exc))
+
+    @close_group.command(name='ticket', description='Close a report and record actions taken; does not punish members.')
+    @app_commands.describe(ticket='Ticket ID from /ticket summary', actions_taken='What was done and why is the ticket resolved?')
+    async def close_ticket(i: discord.Interaction, ticket: str, actions_taken: app_commands.Range[str,5,1000]):
+        await bot.policy(i, 'ticket-close', ticket.strip().lower(), reason=actions_taken)
+
+    bot.tree.add_command(ticket_group, guild=guild)
+    bot.tree.add_command(close_group, guild=guild)
+
     @bot.tree.command(name='dashboard', description='Read private pending staff reviews.', guild=guild)
     async def dashboard(i: discord.Interaction, section: Literal['reviews','reports','councils','members','logs','delivery']='reviews', page: app_commands.Range[int,1,10000]=1):
         await i.response.defer(ephemeral=True)
@@ -604,7 +653,7 @@ def register_commands(bot: NexusBot) -> None:
                 records = [q for q in bot.store.all('proposal').values() if q['status'] in {'pending','deferred'} and (q['kind']!='council' or bot.engine.founder(actor))]
                 rows = [f'{q["id"]} | {q["kind"]} | <@{q["member"]}> | {q["status"]}' for q in records]
             elif section=='reports':
-                rows = [f'{rid} | <@{r["member"]}> | {r["reason"][:300]}' for rid,r in bot.store.all('report').items()]
+                rows = ticket_rows(bot.store, 'open')
             elif section=='councils':
                 if not bot.engine.founder(actor):
                     raise PolicyError('Founder access required for Council records.')
