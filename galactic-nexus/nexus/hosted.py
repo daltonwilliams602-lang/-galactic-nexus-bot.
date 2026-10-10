@@ -74,6 +74,26 @@ def prepare_state(root):
     return config_path, config
 
 
+def register_founders_channels(config, environ):
+    """Add only the explicitly configured private rooms to runtime XP tracking."""
+    requested = {
+        'FOUNDERS LOUNGE/founders-chat': environ.get('NEXUS_FOUNDERS_TEXT_CHANNEL_ID', '').strip(),
+        'FOUNDERS LOUNGE/vc:Founders Lounge': environ.get('NEXUS_FOUNDERS_VOICE_CHANNEL_ID', '').strip(),
+    }
+    extras = {key: cid for key, cid in requested.items() if cid}
+    if any(not cid.isascii() or not cid.isdecimal() or int(cid) <= 0 for cid in extras.values()):
+        raise RuntimeError('Founders channel variables must contain valid Discord channel IDs.')
+    if len(set(extras.values())) != len(extras):
+        raise RuntimeError('Founders text and voice channels must have different IDs.')
+    existing = config.get('channel_ids', {})
+    for key, cid in extras.items():
+        if any(str(value) == cid and name != key for name, value in existing.items()):
+            raise RuntimeError('A founders channel ID is already registered under another name.')
+    result = dict(config)
+    result['channel_ids'] = {**existing, **extras}
+    return result
+
+
 async def execute(action, root, environ):
     # The same volume lock covers bootstrap, setup, running, and manual backups.
     # A second replica must never reconcile roles or award activity concurrently.
@@ -113,6 +133,10 @@ async def execute(action, root, environ):
                                'then use NEXUS_ACTION=configure for the reviewed setup on this same volume.')
         if action == 'activate':
             config = activate(config_path, config, environ.get('NEXUS_LAUNCH_CONFIRMATION', ''))
+        config = register_founders_channels(config, environ)
+        for key in ('FOUNDERS LOUNGE/founders-chat', 'FOUNDERS LOUNGE/vc:Founders Lounge'):
+            if key in config['channel_ids']:
+                print('Registered private XP channel: '+key+' ('+str(config['channel_ids'][key])+')', flush=True)
         print('Starting Galactic Nexus hosted worker in '+config['mode'].upper()+' MODE.', flush=True)
         await run_bot(config, token)
         # A safety shutdown or worker failure must be visible to the supervisor.
