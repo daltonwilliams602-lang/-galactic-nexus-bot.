@@ -3,6 +3,7 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 import json
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -83,16 +84,34 @@ class Store:
     def backup(self, folder):
         target = Path(folder) / f"{self.path.stem}-{time.time_ns()}.sqlite3"
         target.parent.mkdir(parents=True, exist_ok=True)
+        pending = target.with_suffix('.sqlite3.partial')
         # A Connection's own context manager commits/rolls back; it does not
         # close the handle. Explicit closing is required for Windows file locks.
-        with closing(sqlite3.connect(target)) as copy:
-            self.db.backup(copy)
-            if copy.execute("PRAGMA integrity_check").fetchone()[0] != 'ok':
-                raise RuntimeError('Backup integrity check failed; retain the source and investigate.')
+        try:
+            with closing(sqlite3.connect(pending)) as copy:
+                self.db.backup(copy)
+                if copy.execute("PRAGMA integrity_check").fetchone()[0] != 'ok':
+                    raise RuntimeError('Backup integrity check failed; retain the source and investigate.')
+            pending.replace(target)
+        except BaseException:
+            pending.unlink(missing_ok=True)
+            raise
         try:
             os.chmod(target, 0o600)
         except OSError:
             pass
+        # Six-hourly snapshots must not eventually fill the state volume.
+        # Rotate only this database's generated copies after a new verified
+        # backup exists. Activation snapshots with paired configs are retained.
+        pattern = re.compile(re.escape(self.path.stem) + r'-([0-9]+)\.sqlite3')
+        snapshots = []
+        for path in target.parent.iterdir():
+            match = pattern.fullmatch(path.name)
+            if (match and path.is_file() and not path.is_symlink()
+                    and not path.with_name(path.stem + '-config.json').exists()):
+                snapshots.append((int(match[1]), path))
+        for _, path in sorted(snapshots, reverse=True)[12:]:
+            path.unlink()
         return target
 
     def close(self):

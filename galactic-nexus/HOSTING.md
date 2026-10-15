@@ -88,7 +88,7 @@ Run **one cloud worker only** and close any old PC bot process. The client handl
 | `/data/backups/` | SQLite backups and server-before snapshots |
 | `/data/review/` | Configuration plan and permission check |
 
-Every deployment reuses these files. Progression is not rebuilt from the example configuration. SQLite backups occur at normal startup and every six hours and stay on the same volume. Download copies or enable provider volume backups after reviewing any storage charges to cover a lost volume too. Never replace a populated database with an empty one.
+Every deployment reuses these files. Progression is not rebuilt from the example configuration. SQLite backups occur at normal startup and every six hours and stay on the same volume. After a new backup passes its integrity check, the newest 12 automatic snapshots per database are retained. Activation snapshots with paired configuration files and unrelated files are preserved. Failed copies are removed without rotating existing snapshots. Download copies or enable provider volume backups after reviewing any storage charges to cover a lost volume too. Never replace a populated database with an empty one.
 
 If you already earned test XP on your PC, stop that bot and preserve its entire `config.local.json`, `data`, and `backups`. Transfer them into the matching locations above **before the first cloud run**. Use a completed SQLite backup, or copy the database and any WAL files only after the old process fully stops. Keep private state out of Docker build context and source control. If only setup was attempted and no bot progression was started, the host can initialize the supplied private-test configuration.
 
