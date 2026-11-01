@@ -12,7 +12,7 @@ import discord
 
 from .bot import run_bot
 from .launch import configure, instance_lock, write_json
-from .storage import Store
+from .storage import Store, prune_backups
 from .activation import activate, validate_live
 
 SETUP_CONFIRMATION = 'CONFIGURE PRIVATE TEST SERVER'
@@ -61,11 +61,14 @@ def prepare_state(root):
         config = json.loads(SEED_CONFIG.read_text(encoding='utf-8'))
     if not isinstance(config, dict) or config.get('mode') not in {'test', 'live'}:
         raise RuntimeError('Unknown hosted mode.')
-    if config['mode'] == 'live':
-        validate_live(config, root / 'data' / 'live.sqlite3')
     for child in (config_path, root/'data', root/'backups', root/'review'):
         if not child.resolve().is_relative_to(root):
             raise RuntimeError('Hosted state must stay inside its mounted volume. Check the imported folder paths.')
+    # Recover backup space before even the atomic config write: on a full volume
+    # that write used to prevent the worker from reaching backup maintenance.
+    prune_backups(root / 'backups', config['mode'])
+    if config['mode'] == 'live':
+        validate_live(config, root / 'data' / 'live.sqlite3')
     config['database_dir'] = str(root / 'data')
     config['backup_dir'] = str(root / 'backups')
     for name in ('data', 'backups', 'review'):

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -72,6 +73,29 @@ class HostedTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, 'matching configuration'):
             prepare_state(self.root)
         self.assertFalse(self.config_path.exists())
+
+    def test_backup_space_is_recovered_before_config_write_on_restart(self):
+        self.ready_config()
+        store = Store(self.root / 'data' / 'test.sqlite3')
+        try:
+            store.put('member', 'fixture', {'xp': 1234, 'rank': 2})
+            seed = store.backup(self.root / 'backups')
+        finally:
+            store.close()
+        for number in range(20):
+            shutil.copyfile(seed, self.root / 'backups' / f'test-{number}.sqlite3')
+        def write_after_rotation(path, config):
+            if len(list((self.root / 'backups').glob('test-*.sqlite3'))) > 8:
+                raise OSError(28, 'No space left on device')
+            write_json(path, config)
+        with patch('nexus.hosted.write_json', side_effect=write_after_rotation):
+            _, loaded = prepare_state(self.root)
+        self.assertEqual(loaded['role_ids'], self.config['role_ids'])
+        reopened = Store(self.root / 'data' / 'test.sqlite3')
+        try:
+            self.assertEqual(reopened.get('member', 'fixture'), {'xp': 1234, 'rank': 2})
+        finally:
+            reopened.close()
 
     def test_hosting_does_not_enable_public_mode(self):
         self.config['mode'] = 'live'
