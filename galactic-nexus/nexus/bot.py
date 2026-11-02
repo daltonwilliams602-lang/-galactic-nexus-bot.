@@ -25,6 +25,7 @@ from .storage import Store
 from .runtime import VoicePresence, drain_outbox
 from .tickets import ticket_rows, ticket_embed
 from .selection import selection_rows, filter_rows, selection_page, selection_csv
+from .age_rules import CURRENT_AGE, embed_text, update_age_text, update_age_embed
 from .server_config import resolve_roles, check_permissions, register_dnd_xp_channels
 
 # Governance and integration roles are never progression-managed.
@@ -133,16 +134,25 @@ class NexusBot(commands.Bot):
                     print('Updated automatic-rank guide in #'+name, flush=True)
 
     async def refresh_age_guides(self):
-        # Only replace known bot templates; preserve founder-written rules/posts.
-        for name in ('rules', 'incoming-transmissions'):
-            current = LIVE_CONTENT.get(name, CONTENT[name]) if self.config_data['mode'] == 'live' else CONTENT[name]
-            templates = {CONTENT[name], LIVE_CONTENT.get(name, CONTENT[name])}
-            previous = {text.replace('18+', '17+').replace('at least 18', 'at least 17')
-                        for text in templates}
+        # The owner requested an age-rule change. Keep customized wording/layout
+        # and change only the age phrases, including in embedded rule posts.
+        for name in ('rules', 'incoming-transmissions', 'choose-your-path', 'server-guide'):
+            updated = other_authors = current_posts = 0
             async for message in self.channel(name).history(limit=None):
-                if message.author.id == self.user.id and message.content in previous:
-                    await message.edit(content=current, allowed_mentions=discord.AllowedMentions.none())
-                    print('Updated 18+ requirement in #'+name, flush=True)
+                content = update_age_text(message.content)
+                old_embeds = [embed.to_dict() for embed in message.embeds]
+                new_embeds = [update_age_embed(embed) for embed in old_embeds]
+                if content != message.content or new_embeds != old_embeds:
+                    if message.author.id != self.user.id:
+                        other_authors += 1
+                        continue
+                    await message.edit(content=content, embeds=[discord.Embed.from_dict(data) for data in new_embeds],
+                                       allowed_mentions=discord.AllowedMentions.none())
+                    updated += 1
+                if CURRENT_AGE.search(content + '\n' + '\n'.join(embed_text(data) for data in new_embeds)):
+                    current_posts += 1
+            print(f'18+ rules check #{name}: {updated} bot posts updated; {current_posts} posts show 18+; '
+                  f'{other_authors} older posts by other authors cannot be edited by the bot.', flush=True)
 
     def channel(self, name):
         ids = [cid for key,cid in self.config_data.get('channel_ids',{}).items() if key.endswith('/'+name)]

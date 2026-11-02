@@ -56,14 +56,20 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('attachments', response)
         self.assertIn('Could not create selection log', response['content'])
 
-    async def test_age_update_edits_only_old_bot_rules_and_welcome(self):
+    async def test_age_update_preserves_custom_wording_and_other_authors(self):
         from nexus.blueprint import CONTENT, LIVE_CONTENT
         messages = {}
         def channel(name):
             current = LIVE_CONTENT.get(name, CONTENT[name])
             old = current.replace('18+', '17+').replace('at least 18', 'at least 17')
-            items = [Obj(author=Obj(id=author), content=text, edit=AsyncMock())
+            # Include altered formatting that cannot match the setup template.
+            old = old + '\nCustom footer: keep this.'
+            if '17+' not in old and 'at least 17' not in old:
+                old += '\n17+ community'
+            items = [Obj(author=Obj(id=author), content=text, embeds=[], edit=AsyncMock())
                      for author, text in [(7, old), (8, old), (7, current), (7, 'Custom founder guide')]]
+            embedded = discord.Embed(title='Community rules', description='You must be at least 17. Be respectful.')
+            items.append(Obj(author=Obj(id=7), content='', embeds=[embedded], edit=AsyncMock()))
             messages[name] = items
             async def history(limit):
                 for message in items:
@@ -72,9 +78,12 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         await NexusBot.refresh_age_guides(Obj(user=Obj(id=7), channel=channel, config_data={'mode': 'live'}))
         for name, items in messages.items():
             items[0].edit.assert_awaited_once()
-            self.assertEqual(items[0].edit.call_args.kwargs['content'], LIVE_CONTENT.get(name, CONTENT[name]))
-            for item in items[1:]:
+            self.assertIn('Custom footer: keep this.', items[0].edit.call_args.kwargs['content'])
+            self.assertNotIn('17+', items[0].edit.call_args.kwargs['content'])
+            for item in items[1:4]:
                 item.edit.assert_not_awaited()
+            self.assertEqual(items[4].edit.call_args.kwargs['embeds'][0].description,
+                             'You must be at least 18. Be respectful.')
 
     async def test_guide_refresh_only_edits_exact_bot_templates(self):
         from nexus.blueprint import CONTENT, LEGACY_PROGRESSION_GUIDES, LEGACY_VOICE_GUIDES
