@@ -81,7 +81,7 @@ def can_view(roles, category, channel=None, owner=False):
 
 
 RULES = """## THE GALACTIC NEXUS • Community rules
-1. **17+ and SFW.** Confirm you are at least 17. No pornography or explicit sexual content.
+1. **18+ and SFW.** Confirm you are at least 18. No pornography or explicit sexual content.
 2. **Treat people reasonably.** Profanity, mature jokes, and friendly Light vs Dark trash talk are welcome. Targeted harassment, serious bullying, and threats are not.
 3. **No racism or hate speech.** A joke is not an excuse to attack a person's identity.
 4. **Keep people and accounts safe.** No scams, malware, malicious links, doxxing, or raids.
@@ -94,7 +94,7 @@ This is a gaming community, not compulsory roleplay. Be someone others enjoy han
 """
 CONTENT = {
     "rules": RULES,
-    "incoming-transmissions": "**INCOMING TRANSMISSIONS**\nWelcome to **THE GALACTIC NEXUS**.\n*Choose your path. Earn your rank. Shape the galaxy.*\n\nRead #rules, then use `/join` to confirm 17+ and accept them. Choose a faction in #choose-your-path.\n\n**PRIVATE FOUNDER TESTING:** invitations and public launch remain closed pending the owner's approval.",
+    "incoming-transmissions": "**INCOMING TRANSMISSIONS**\nWelcome to **THE GALACTIC NEXUS**.\n*Choose your path. Earn your rank. Shape the galaxy.*\n\nRead #rules, then use `/join` to confirm 18+ and accept them. Choose a faction in #choose-your-path.\n\n**PRIVATE FOUNDER TESTING:** invitations and public launch remain closed pending the owner's approval.",
     "choose-your-path": "**CHOOSE YOUR PATH**\nEveryone begins **Force Sensitive**. Use `/path` to choose **Jedi / Light Side** or **Sith / Dark Side**.\n\nYour first choice opens your faction's channels; your first three lore ranks advance automatically with enough XP. Jedi Master and Sith Lord require two different staff approvals. Switching later has a **30-day cooldown** and a displayed transfer penalty. Use `/faction-request` for a mistake or exception. Your earned history stays intact.",
     "roles": "**MAKE THE NEXUS YOUR OWN**\nUse `/interest` for optional **Game Nights**, **Stream Alerts**, and **Events** roles. These are notification preferences and do not grant authority.\nRank roles through Knight/Warrior update automatically from XP. Master/Lord and Council appointments need human approval; founder and staff authority remain separate.",
     "server-guide": "**YOUR QUICK SERVER GUIDE**\nChat in #general; share games, clips, art, or memes in HOLOCOMMS. Meet up in the Cantina voice rooms. Your faction has its own commons and training rooms.\n\n`/profile` • your rank and progress\n`/path` • choose or change faction\n`/voice-check` • confirm you're participating in VC\n`/campaign` • this season's score\n`/report` • private help or moderation appeal\n\nStaff roles and Founding Council govern the community. Jedi/Sith ranks and lore Councils do not grant moderation powers. Normal earned ranks do not expire when you take a break.",

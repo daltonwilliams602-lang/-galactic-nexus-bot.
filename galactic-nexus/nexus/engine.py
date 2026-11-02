@@ -226,7 +226,7 @@ class Engine:
             'after': after, 'reason': reason, 'mode': self.c['mode']})
 
     def switch_path(self, m, destination, bypass=False):
-        require(m['accepted'], 'Accept the rules and confirm 17+ first.')
+        require(m['accepted'], 'Accept the rules and confirm 18+ first.')
         require(destination in RANKS and destination != m['path'], 'Choose a different valid path.')
         require(bypass or self.clock() >= m['cooldown_until'], 'The 30-day faction cooldown is still active. Use /faction-request for an exception.')
         previous = m['path']
@@ -258,12 +258,20 @@ class Engine:
             require(len(reason) >= 5, 'Give a specific reason of at least five characters.')
         if action == 'join':
             require(args.get('age_confirmed') is True and args.get('rules_accepted') is True,
-                    'You must confirm that you are 17+ and accept the rules.')
-            require(not m['accepted'], 'You already completed onboarding.')
-            m.update(accepted=True, accepted_at=self.clock(), rules_version=1)
+                    'You must confirm that you are 18+ and accept the rules.')
+            already_joined = m['accepted']
+            require(not already_joined or m.get('rules_version', 1) < 2,
+                    'You already accepted the current 18+ rules.')
+            if not already_joined:
+                m['accepted_at'] = self.clock()
+            m.update(accepted=True, rules_version=2, minimum_age_confirmed=18,
+                     rules_accepted_at=self.clock())
             self.save_member(m)
-            self.s.enqueue('welcome', {'member': target}, ident='welcome:' + target)
-            result = {'from': 'New arrival', 'to': 'Member + Force Sensitive', 'declaration': 'I am at least 17 and accept the community rules.'}
+            if not already_joined:
+                self.s.enqueue('welcome', {'member': target}, ident='welcome:' + target)
+            result = {'from': 'Earlier community rules' if already_joined else 'New arrival',
+                      'to': 'Current 18+ rules; existing progress kept' if already_joined else 'Member + Force Sensitive',
+                      'declaration': 'I am at least 18 and accept the community rules.'}
         elif action == 'path':
             result = self.switch_path(m, args.get('path'))
         elif action == 'faction-request':

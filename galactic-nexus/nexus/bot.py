@@ -7,6 +7,7 @@ roles from the engine's desired state.  Run with NEXUS_TOKEN in the environment.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import os
 import time
@@ -23,6 +24,7 @@ from .engine import Actor, Engine, PolicyError
 from .storage import Store
 from .runtime import VoicePresence, drain_outbox
 from .tickets import ticket_rows, ticket_embed
+from .selection import selection_rows, filter_rows, selection_page, selection_csv
 from .server_config import resolve_roles, check_permissions, register_dnd_xp_channels
 
 # Governance and integration roles are never progression-managed.
@@ -105,6 +107,7 @@ class NexusBot(commands.Bot):
                 self.validate_channels(guild)
                 self.store.backup(self.config_data.get('backup_dir','backups'))
                 await self.refresh_progression_guides()
+                await self.refresh_age_guides()
                 await self.tree.sync(guild=discord.Object(id=self.guild_id))
             except (RuntimeError, discord.HTTPException) as exc:
                 self._startup_error = str(exc)
@@ -128,6 +131,18 @@ class NexusBot(commands.Bot):
                 if message.author.id == self.user.id and message.content == previous:
                     await message.edit(content=current, allowed_mentions=discord.AllowedMentions.none())
                     print('Updated automatic-rank guide in #'+name, flush=True)
+
+    async def refresh_age_guides(self):
+        # Only replace known bot templates; preserve founder-written rules/posts.
+        for name in ('rules', 'incoming-transmissions'):
+            current = LIVE_CONTENT.get(name, CONTENT[name]) if self.config_data['mode'] == 'live' else CONTENT[name]
+            templates = {CONTENT[name], LIVE_CONTENT.get(name, CONTENT[name])}
+            previous = {text.replace('18+', '17+').replace('at least 18', 'at least 17')
+                        for text in templates}
+            async for message in self.channel(name).history(limit=None):
+                if message.author.id == self.user.id and message.content in previous:
+                    await message.edit(content=current, allowed_mentions=discord.AllowedMentions.none())
+                    print('Updated 18+ requirement in #'+name, flush=True)
 
     def channel(self, name):
         ids = [cid for key,cid in self.config_data.get('channel_ids',{}).items() if key.endswith('/'+name)]
@@ -481,8 +496,8 @@ class ConfirmView(discord.ui.View):
 def register_commands(bot: NexusBot) -> None:
     guild = discord.Object(id=bot.guild_id)
 
-    @bot.tree.command(name="join", description="Confirm the 17+ SFW rules and join the Nexus.", guild=guild)
-    @app_commands.describe(age_confirmed="You confirm you are 17 or older.", rules_accepted="You accept the server rules.")
+    @bot.tree.command(name="join", description="Confirm the 18+ SFW rules and join the Nexus.", guild=guild)
+    @app_commands.describe(age_confirmed="You confirm you are 18 or older.", rules_accepted="You accept the server rules.")
     async def join(i: discord.Interaction, age_confirmed: bool, rules_accepted: bool):
         await bot.policy(i, "join", age_confirmed=age_confirmed, rules_accepted=rules_accepted)
 
@@ -508,6 +523,37 @@ def register_commands(bot: NexusBot) -> None:
         path = member['path']
         rank = RANKS[path][member['rank']] if path else 'Force Sensitive'
         await i.edit_original_response(content=f'Path: {path or "Not selected"}\nRank: {rank}\nTotal XP: {member["xp"]:,}')
+
+    @bot.tree.command(name='selection-log', description='Staff: list every server member and their side or missing selection steps.', guild=guild)
+    @app_commands.describe(selection='Show everyone, one side, or members with unfinished onboarding.', page='Page to display; the CSV always includes all matching members.')
+    async def selection_log(i: discord.Interaction,
+                            selection: Literal['all', 'complete', 'incomplete', 'jedi', 'sith', 'bot']='all',
+                            page: app_commands.Range[int,1,10000]=1):
+        await i.response.defer(ephemeral=True)
+        try:
+            actor = await bot.fresh_actor(i)
+            if not bot.engine.staff(actor):
+                raise PolicyError('Staff access required.')
+            # REST pagination includes uncached members and people who never used /join.
+            # If fetching fails, do not present a partial list as the whole server.
+            members = [member async for member in i.guild.fetch_members(limit=None)]
+            rows = selection_rows(members, bot.store.all('member'))
+            selected = filter_rows(rows, selection)
+            generated_at = time.time()
+            content = selection_page(rows, selected, selection, page, generated_at)
+            export = selection_csv(selected, generated_at)
+            if len(export) > i.guild.filesize_limit:
+                raise PolicyError('This export exceeds the server upload limit. Choose a narrower selection filter.')
+            with io.BytesIO(export) as payload:
+                attachment = discord.File(payload, filename=f'selection-log-{selection}.csv')
+                try:
+                    await i.edit_original_response(content=content, attachments=[attachment],
+                                                   allowed_mentions=discord.AllowedMentions.none())
+                finally:
+                    attachment.close()
+        except (ValueError, discord.HTTPException, discord.ClientException) as exc:
+            await i.edit_original_response(content=f'Could not create selection log: {exc}',
+                                           allowed_mentions=discord.AllowedMentions.none())
 
     @bot.tree.command(name='faction-request', description='Ask staff to review a faction change exception.', guild=guild)
     async def faction_request(i: discord.Interaction, path: Literal['jedi','sith'], reason: str):

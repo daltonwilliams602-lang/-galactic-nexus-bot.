@@ -12,6 +12,70 @@ from nexus.engine import Actor, PolicyError
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_selection_log_is_staff_only_private_and_fetches_full_roster(self):
+        register_commands(self.bot)
+        command = self.bot.tree.get_command('selection-log', guild=discord.Object(id=100))
+        calls = []
+        async def fetch_members(*, limit):
+            calls.append(limit)
+            for uid in range(1, 1003):
+                yield Obj(id=uid, name=f'user{uid}', display_name=f'Member {uid}', bot=False)
+        interaction = Obj(response=Obj(defer=AsyncMock()), edit_original_response=AsyncMock(),
+                          guild=Obj(fetch_members=fetch_members, filesize_limit=10_000_000))
+        self.bot.fresh_actor = AsyncMock(return_value=Actor('99'))
+        await command.callback(interaction)
+        self.assertEqual(calls, [])
+        self.assertIn('Staff access required', interaction.edit_original_response.call_args.kwargs['content'])
+        self.bot.fresh_actor = AsyncMock(return_value=Actor('1'))
+        captured = {}
+        async def capture(**kwargs):
+            captured.update(kwargs)
+            captured['csv'] = kwargs['attachments'][0].fp.read().decode('utf-8-sig')
+        interaction.edit_original_response = AsyncMock(side_effect=capture)
+        before = self.bot.store.all('member')
+        await command.callback(interaction, selection='incomplete')
+        self.assertEqual(calls, [None])
+        self.assertEqual(self.bot.store.all('member'), before)
+        self.assertIn('1002', captured['content'])
+        self.assertIn('user1002', captured['csv'])
+        self.assertEqual(captured['allowed_mentions'].to_dict(), {'parse': []})
+        for call in interaction.response.defer.call_args_list:
+            self.assertEqual(call.kwargs, {'ephemeral': True})
+
+    async def test_selection_log_does_not_return_partial_data_after_fetch_failure(self):
+        register_commands(self.bot)
+        command = self.bot.tree.get_command('selection-log', guild=discord.Object(id=100))
+        async def fetch_members(*, limit):
+            yield Obj(id=10, name='user', display_name='Member', bot=False)
+            raise discord.ClientException('Member fetch failed')
+        interaction = Obj(response=Obj(defer=AsyncMock()), edit_original_response=AsyncMock(),
+                          guild=Obj(fetch_members=fetch_members))
+        self.bot.fresh_actor = AsyncMock(return_value=Actor('1'))
+        await command.callback(interaction)
+        response = interaction.edit_original_response.call_args.kwargs
+        self.assertNotIn('attachments', response)
+        self.assertIn('Could not create selection log', response['content'])
+
+    async def test_age_update_edits_only_old_bot_rules_and_welcome(self):
+        from nexus.blueprint import CONTENT, LIVE_CONTENT
+        messages = {}
+        def channel(name):
+            current = LIVE_CONTENT.get(name, CONTENT[name])
+            old = current.replace('18+', '17+').replace('at least 18', 'at least 17')
+            items = [Obj(author=Obj(id=author), content=text, edit=AsyncMock())
+                     for author, text in [(7, old), (8, old), (7, current), (7, 'Custom founder guide')]]
+            messages[name] = items
+            async def history(limit):
+                for message in items:
+                    yield message
+            return Obj(history=history)
+        await NexusBot.refresh_age_guides(Obj(user=Obj(id=7), channel=channel, config_data={'mode': 'live'}))
+        for name, items in messages.items():
+            items[0].edit.assert_awaited_once()
+            self.assertEqual(items[0].edit.call_args.kwargs['content'], LIVE_CONTENT.get(name, CONTENT[name]))
+            for item in items[1:]:
+                item.edit.assert_not_awaited()
+
     async def test_guide_refresh_only_edits_exact_bot_templates(self):
         from nexus.blueprint import CONTENT, LEGACY_PROGRESSION_GUIDES, LEGACY_VOICE_GUIDES
         edits=[]

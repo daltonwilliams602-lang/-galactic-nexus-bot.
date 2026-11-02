@@ -8,6 +8,32 @@ from nexus.blueprint import ROLE_ORDER, ROLE_PERMISSIONS, can_view, RANKS
 
 
 class PolicyTests(unittest.TestCase):
+    def test_updated_rules_require_confirmation_and_preserve_existing_progress(self):
+        self.join()
+        m = self.e.member('10')
+        m.update(rules_version=1, xp=1234, rank=2, minimum_age_confirmed=17)
+        m['paths']['jedi']['xp'] = 1234
+        self.e.save_member(m)
+        original = self.e.member('10')
+        original_welcomes = self.s.db.execute("SELECT count(*) FROM outbox WHERE kind='welcome'").fetchone()[0]
+        self.now += 3600
+        with self.assertRaisesRegex(PolicyError, '18\\+'):
+            self.e.preview(self.user, 'join', '10', {'age_confirmed': False, 'rules_accepted': True})
+        self.assertEqual(self.e.member('10'), original)
+        token, preview = self.e.preview(self.user, 'join', '10', {'age_confirmed': True, 'rules_accepted': True})
+        self.assertIn('18', str(preview))
+        self.assertEqual(self.e.member('10'), original)
+        self.e.confirm(self.user, token)
+        updated = self.e.member('10')
+        for key in ('accepted_at', 'xp', 'rank', 'path', 'paths', 'cooldown_until', 'prestige'):
+            self.assertEqual(updated[key], original[key])
+        self.assertEqual(updated['minimum_age_confirmed'], 18)
+        self.assertEqual(updated['rules_version'], 2)
+        self.assertEqual(updated['rules_accepted_at'], self.now)
+        self.assertEqual(self.s.db.execute("SELECT count(*) FROM outbox WHERE kind='welcome'").fetchone()[0], original_welcomes)
+        with self.assertRaises(PolicyError):
+            self.do(self.user, 'join', age_confirmed=True, rules_accepted=True)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.now = 1800000000.0

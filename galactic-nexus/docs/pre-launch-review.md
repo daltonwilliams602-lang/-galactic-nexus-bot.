@@ -77,7 +77,7 @@ Private Jedi/Sith categories grant the relevant faction plus staff oversight. Fo
 
 ## 5. Onboarding
 
-Join → Arrival/rules → `/join` with separate 17+ and rules affirmations → preview → Confirm → Member + Force Sensitive → `/path` → preview → Confirm → faction access. Self-service interest roles are separate. Founders choose their own paths. Dalton initially chooses Sith, without automatically receiving a high lore rank.
+Join → Arrival/rules → `/join` with separate 18+ and rules affirmations → preview → Confirm → Member + Force Sensitive → `/path` → preview → Confirm → faction access. Self-service interest roles are separate. Founders choose their own paths. Dalton initially chooses Sith, without automatically receiving a high lore rank.
 
 ## 6. Force XP
 
