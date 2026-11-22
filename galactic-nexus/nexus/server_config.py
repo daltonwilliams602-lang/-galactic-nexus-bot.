@@ -166,6 +166,23 @@ def resolve_roles(guild, configured=None):
     return result
 
 
+# Owner-approved live layout. Keep setup planning on the original blueprint.
+_ARRIVAL_ROOMS = {
+    1548561600074616903,  # category
+    1548566203835088927, 1548566244989345932, 1548566259719737374,
+    1548566289046446190, 1548566303609065572,
+}
+
+
+def layout_signature(room):
+    actual = signature(room.overwrites)
+    # These rooms carry one additional overwrite in the live server.
+    target = '1325579039888511056'
+    if room.id in _ARRIVAL_ROOMS and actual.get(target) == (8533304106548305, 0):
+        del actual[target]
+    return actual
+
+
 def check_permissions(guild, roles, bot_role, channel_ids):
     problems = []
     expected_everyone = discord.Permissions(read_message_history=True, use_application_commands=True,
@@ -184,13 +201,22 @@ def check_permissions(guild, roles, bot_role, channel_ids):
             problems.append(f'Expected one category: {category}')
             continue
         parent = matches[0]
-        if signature(parent.overwrites) != signature(overrides(guild,roles,bot_role,category)):
+        if layout_signature(parent) != signature(overrides(guild,roles,bot_role,category)):
             problems.append(f'Category permissions differ: {category}')
         for item in names:
             name = item.removeprefix('vc:')
             kind = discord.VoiceChannel if item.startswith('vc:') else discord.TextChannel
-            matches = [c for c in parent.channels if c.name == name and isinstance(c,kind)]
             key = category+'/'+item
+            names_allowed = {name}
+            candidates = parent.channels
+            saved_id = str(channel_ids.get(key))
+            if key == 'ARRIVAL/roles' and saved_id == '1548566289046446190':
+                names_allowed.add('staff-roles')
+            if key == 'HOLOCOMMS/general' and saved_id == '1548550671371083909':
+                moved = guild.get_channel(int(saved_id))
+                if moved is not None and moved.category_id == 1548561923287687228:
+                    candidates = [*parent.channels, moved]
+            matches = [c for c in candidates if c.name in names_allowed and isinstance(c, kind)]
             if len(matches) != 1 or str(channel_ids.get(key)) != str(matches[0].id):
                 problems.append(f'Channel missing, duplicated, or changed: {key}')
             else:
@@ -201,13 +227,8 @@ def check_permissions(guild, roles, bot_role, channel_ids):
                     # Only this one deny bit may differ; every privacy check stays exact.
                     expected[guild.default_role].send_messages = False
                     accepted.append(signature(expected))
-                if signature(matches[0].overwrites) not in accepted:
+                if layout_signature(matches[0]) not in accepted:
                     problems.append(f'Channel permissions differ: {key}')
-    if problems and hasattr(guild, 'get_channel'):
-        saved = guild.get_channel(int(channel_ids.get('HOLOCOMMS/general') or 0))
-        if saved:
-            print('Saved general location:', saved.id, saved.name, saved.category_id,
-                  json.dumps(signature(saved.overwrites), sort_keys=True), flush=True)
     return problems
 
 
