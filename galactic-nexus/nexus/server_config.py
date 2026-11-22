@@ -204,16 +204,10 @@ def check_permissions(guild, roles, bot_role, channel_ids):
                 if signature(matches[0].overwrites) not in accepted:
                     problems.append(f'Channel permissions differ: {key}')
     if problems and hasattr(guild, 'get_channel'):
-        for category in guild.categories:
-            if category.name not in {'ARRIVAL', 'HOLOCOMMS'}:
-                continue
-            for room in [category, *category.channels]:
-                print('Layout check:', category.name, room.name, room.id,
-                      json.dumps(signature(room.overwrites), sort_keys=True), flush=True)
-        for key in ('ARRIVAL/roles', 'HOLOCOMMS/general'):
-            saved = guild.get_channel(int(channel_ids[key])) if channel_ids.get(key) else None
-            print('Saved channel:', key, getattr(saved, 'id', None),
-                  getattr(saved, 'name', None), flush=True)
+        saved = guild.get_channel(int(channel_ids.get('HOLOCOMMS/general') or 0))
+        if saved:
+            print('Saved general location:', saved.id, saved.name, saved.category_id,
+                  json.dumps(signature(saved.overwrites), sort_keys=True), flush=True)
     return problems
 
 
